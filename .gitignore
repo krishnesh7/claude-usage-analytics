@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Generated reports (may contain prompt content — never commit)
+claude-usage-report-*.html
+report-*.html
+*_report_preview.html
+
+# Local databases / caches (live outside repo, but guard anyway)
+*.db
+*.db-wal
+*.db-shm
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

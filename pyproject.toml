@@ -1,0 +1,25 @@
+[project]
+name = "claude-usage-analytics"
+version = "0.1.0"
+description = "Local analytics for Claude Code Pro plan: token usage, imputed cost, SDLC stage attribution, and reports."
+requires-python = ">=3.10"
+dependencies = [
+  "click>=8.1",
+  "jinja2>=3.1",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+]
+
+[project.scripts]
+cu = "claude_usage.cli:cli"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["claude_usage*"]
+
+[tool.setuptools.package-data]
+claude_usage = ["../templates/*.j2", "../templates/*.html"]

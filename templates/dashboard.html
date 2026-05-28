@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cu · dashboard</title>
+<style>
+  :root {
+    --ivory: #FAF9F5; --bg: #1a1918; --fg: #d1cfc5; --tb: #252321;
+    --outline: rgba(255,255,255,0.08); --clay: #D97757; --dim: rgb(136,136,136);
+    --green: rgb(78,186,101); --red: rgb(255,107,128); --yellow: rgb(255,193,7);
+    --blue: rgb(100,160,255);
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--ivory); margin: 0; }
+  body { padding: 32px 24px; font: 13px/1.5 var(--mono); color: var(--fg); font-variant-numeric: tabular-nums; }
+  .term { max-width: min(1600px, 96vw); margin: 0 auto; background: var(--bg); border-radius: 8px; outline: 1px solid var(--outline); box-shadow: 0 20px 60px rgba(20,20,19,0.22); }
+  .titlebar { background: var(--tb); border-radius: 8px 8px 0 0; padding: 11px 14px; display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--outline); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: #3a3836; }
+  .path { margin-left: 14px; color: var(--dim); font-size: 11px; }
+  .term-body { padding: 22px 30px 30px; }
+  .controls { display: flex; gap: 16px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+  .controls label { color: var(--dim); font-size: 11px; }
+  .controls input, .controls select, .controls button { background: rgba(255,255,255,0.04); border: 1px solid var(--outline); color: var(--fg); padding: 6px 10px; border-radius: 4px; font: inherit; }
+  .controls button { cursor: pointer; }
+  .controls button:hover { background: rgba(255,255,255,0.08); }
+  .hero { font-size: 44px; font-weight: 700; line-height: 1; margin: 8px 0 4px; }
+  .hero .sub { font-size: 13px; color: var(--dim); margin-left: 10px; font-weight: 400; }
+  .hero-split { color: var(--dim); margin-top: 6px; margin-bottom: 16px; }
+  .hero-split .v { color: var(--fg); }
+  .hero-split .ok { color: var(--green); }
+  .hero-split .warn { color: var(--yellow); }
+  .hero-split .red { color: var(--red); }
+  h2 { all: unset; display: block; color: var(--clay); margin-top: 24px; margin-bottom: 2px; }
+  h2::before { content: '▸ '; }
+  .breadcrumb { color: var(--dim); font-size: 11px; margin-bottom: 6px; margin-top: 4px; }
+  .breadcrumb button { background: none; border: none; color: var(--blue); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; table-layout: fixed; }
+  th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; }
+  th { color: var(--dim); font-weight: 500; font-size: 11px; letter-spacing: 0.4px; }
+  th:first-child, td:first-child { text-align: left; overflow: hidden; text-overflow: ellipsis; }
+  #t-project col.c-name, #t-stage col.c-name, #t-agent col.c-name, #t-sessions col.c-name { width: auto; }
+  #t-project col.c-num, #t-stage col.c-num, #t-agent col.c-num, #t-sessions col.c-num { width: 78px; }
+  #t-project col.c-pct, #t-stage col.c-pct { width: 56px; }
+  tr:hover td { background: rgba(255,255,255,0.025); }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: rgba(100,160,255,0.07); }
+  tr.clickable td:first-child { color: var(--blue); }
+  .stage-overhead { color: var(--yellow); }
+  .stage-overhead td:first-child::before { content: '⟳ '; }
+  .footer { color: rgba(255,255,255,0.25); font-size: 11px; margin-top: 22px; text-align: center; }
+  .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: middle; }
+  .live-dot.stale { background: var(--red); }
+  .pct { color: var(--dim); }
+  .pct.ok { color: var(--green); }
+  .pct.warn { color: var(--yellow); }
+  .pct.red { color: var(--red); }
+  .sparkline-wrap { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 20px; }
+  .sparkline-wrap svg { display: block; }
+  .spark-label { color: var(--dim); font-size: 11px; }
+  .spark-tip { position: absolute; display: none; background: var(--tb); color: var(--fg); border: 1px solid var(--outline); border-radius: 4px; padding: 4px 8px; font-size: 11px; pointer-events: none; z-index: 10; white-space: nowrap; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--fg); }
+  th.sortable[data-sort="asc"]::after { content: ' ▲'; color: var(--clay); font-size: 9px; }
+  th.sortable[data-sort="desc"]::after { content: ' ▼'; color: var(--clay); font-size: 9px; }
+  .session-search { width: 280px; margin: 0 0 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--outline); color: var(--fg); padding: 6px 10px; border-radius: 4px; font: inherit; font-size: 12px; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; background: rgba(255,255,255,0.06); }
+  .session-id { font-size: 11px; cursor: pointer; vertical-align: top; }
+  .session-id:hover .session-sub-id { text-decoration: underline; }
+  .session-name { display: block; color: var(--fg); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .session-sub-id { color: var(--blue); font-size: 10px; letter-spacing: 0.3px; }
+  .hint { color: var(--dim); font-size: 11px; margin: 4px 0 6px; }
+  #panel-sessions { display: none; }
+  tr.breakdown-row td.breakdown-cell { background: rgba(100,160,255,0.04); padding: 10px 22px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  table.inner-breakdown { width: 100%; margin-top: 0; font-size: 12px; table-layout: fixed; }
+  table.inner-breakdown th { color: var(--dim); font-size: 10px; padding: 3px 8px; }
+  table.inner-breakdown td { padding: 3px 8px; border-bottom: 1px dashed rgba(255,255,255,0.04); }
+  table.inner-breakdown td:first-child { color: var(--blue); }
+</style>
+</head>
+<body>
+<div class="term">
+  <div class="titlebar">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <span class="path">~ • cu serve · <span id="live"><span class="live-dot" id="live-dot"></span><span id="live-text">live</span></span></span>
+  </div>
+  <div class="term-body">
+    <div class="controls">
+      <label>project <input id="f-project" placeholder="(all)" style="width: 200px"></label>
+      <label>since
+        <select id="f-since">
+          <option value="24h">24h</option>
+          <option value="7d" selected>7d</option>
+          <option value="30d">30d</option>
+          <option value="all">all</option>
+        </select>
+      </label>
+      <label>kind
+        <select id="f-kind">
+          <option value="user" selected>user only</option>
+          <option value="subagent">subagent only</option>
+          <option value="tracker">tracker</option>
+          <option value="all">all</option>
+        </select>
+      </label>
+      <button id="refresh">↺ refresh</button>
+    </div>
+
+    <!-- Overview panel -->
+    <div id="panel-overview">
+      <div id="hero" class="hero"></div>
+      <div id="hero-split" class="hero-split"></div>
+      <div id="sparkline-wrap" class="sparkline-wrap"></div>
+      <div id="spark-tip" class="spark-tip"></div>
+
+      <h2 id="h-project">by project</h2>
+      <p class="hint">Click a row to drill into individual sessions.</p>
+      <table id="t-project">
+        <colgroup>
+          <col class="c-name"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-pct">
+        </colgroup>
+        <thead><tr><th>project</th><th>sess</th><th>turns</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h2 id="h-model">by model</h2>
+      <table id="t-model">
+        <thead><tr><th>model</th><th>tokens</th><th>input</th><th>cache·read</th><th>output</th><th>cost</th><th>cache·hit</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h2>by SDLC stage</h2>
+      <p class="hint">Click a row to see the project distribution for that stage.</p>
+      <table id="t-stage">
+        <thead><tr><th>stage</th><th>sess</th><th>turns</th><th>input</th><th>cache·write</th><th>cache·read</th><th>output</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h2 id="h-agent">by subagent</h2>
+      <p class="hint">Click a row to see the project distribution for that agent type.</p>
+      <table id="t-agent">
+        <thead><tr><th>agent_type</th><th>sess</th><th>turns</th><th>tokens</th><th>avg/sess</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Sessions drill-down panel -->
+    <div id="panel-sessions">
+      <div class="breadcrumb">
+        <button id="back-link">← all projects</button>
+        <span> / </span><span id="drill-project-label"></span>
+      </div>
+      <h2>sessions</h2>
+      <input id="f-session-search" class="session-search" placeholder="filter sessions by label…">
+
+      <table id="t-sessions">
+        <thead><tr><th>started</th><th>stage</th><th>turns</th><th>tokens</th><th>cost</th><th>cache·read</th><th>name / id</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="footer" id="footer"></div>
+  </div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+const fmt = (n) => {
+  n = +n || 0;
+  if (n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'k';
+  return String(n);
+};
+const fmtDate = (s) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+};
+
+function mkEl(tag, text, cls) {
+  const e = document.createElement(tag);
+  if (text != null) e.textContent = String(text);
+  if (cls) e.className = cls;
+  return e;
+}
+function clearKids(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+// --- Sortable tables -------------------------------------------------------
+// sortState[tableId] = { idx, dir }  (dir: 1 asc, -1 desc)
+const sortState = {};
+const sortAccessors = {};   // tableId -> { colIdx: row => value }
+const rowCache = {};        // tableId -> last rows array
+
+function applySort(tableId, rows) {
+  const st = sortState[tableId];
+  const acc = sortAccessors[tableId];
+  if (!st || !acc || !(st.idx in acc)) return rows;
+  const f = acc[st.idx];
+  return [...rows].sort((a, b) => {
+    const va = f(a), vb = f(b);
+    if (typeof va === 'string' || typeof vb === 'string') {
+      return st.dir * String(va ?? '').localeCompare(String(vb ?? ''));
+    }
+    return st.dir * ((va ?? 0) - (vb ?? 0));
+  });
+}
+
+function enableSort(tableId, accessors, renderFn) {
+  sortAccessors[tableId] = accessors;
+  const ths = document.querySelectorAll(`#${tableId} thead th`);
+  ths.forEach((th, idx) => {
+    if (!(idx in accessors)) return;
+    th.classList.add('sortable');
+    th.onclick = () => {
+      const st = sortState[tableId];
+      if (st && st.idx === idx) st.dir = -st.dir;
+      else sortState[tableId] = { idx, dir: -1 };
+      renderFn(rowCache[tableId] || []);
+    };
+  });
+}
+
+function markSortHeader(tableId) {
+  const st = sortState[tableId];
+  const ths = document.querySelectorAll(`#${tableId} thead th`);
+  ths.forEach((th, idx) => {
+    th.removeAttribute('data-sort');
+    if (st && st.idx === idx) th.setAttribute('data-sort', st.dir < 0 ? 'desc' : 'asc');
+  });
+}
+
+// Build a <tr> from an array of cell descriptors.
+// Each cell is a string, or {text, cls, title} object.
+function mkRow(cells, rowCls) {
+  const tr = document.createElement('tr');
+  if (rowCls) tr.className = rowCls;
+  for (const c of cells) {
+    const td = document.createElement('td');
+    if (c && typeof c === 'object') {
+      td.textContent = String(c.text ?? '');
+      if (c.cls) td.className = c.cls;
+      if (c.title) td.title = c.title;
+    } else {
+      td.textContent = String(c ?? '');
+    }
+    tr.appendChild(td);
+  }
+  return tr;
+}
+
+function renderHero(t) {
+  const hero = $('#hero');
+  clearKids(hero);
+  hero.appendChild(document.createTextNode('$' + (t.cost?.total_usd ?? 0).toFixed(2)));
+  const sub = mkEl('span', 'imputed · ' + t.since_label, 'sub');
+  hero.appendChild(sub);
+
+  const split = $('#hero-split');
+  clearKids(split);
+  const add = (txt, cls) => {
+    if (cls) { const s = mkEl('span', txt, cls); split.appendChild(s); }
+    else split.appendChild(document.createTextNode(txt));
+  };
+  add(' '); add(fmt(t.total_tokens), 'v'); add(' tokens · ');
+  add(String(t.sessions), 'v'); add(' sessions · in ');
+  add(fmt(t.input_tokens), 'v'); add(' · out ');
+  add(fmt(t.output_tokens), 'v'); add(' · cache-write ');
+  add(fmt(t.cache_creation_tokens), 'v'); add(' · cache-read ');
+  add(fmt(t.cache_read_tokens), 'ok');
+  if (t.cache_hit_rate != null) {
+    const pct = (t.cache_hit_rate * 100).toFixed(1) + '%';
+    const cls = t.cache_hit_rate >= 0.85 ? 'ok' : t.cache_hit_rate >= 0.5 ? 'warn' : 'red';
+    add(' · cache hit '); add(pct, cls);
+  }
+}
+
+function fmtCacheHit(rate) {
+  if (rate == null) return { text: '—', cls: 'pct' };
+  const pct = (rate * 100).toFixed(0) + '%';
+  const cls = rate >= 0.85 ? 'pct ok' : rate >= 0.5 ? 'pct warn' : 'pct red';
+  return { text: pct, cls };
+}
+
+function renderStageTable(rows) {
+  const tbody = $('#t-stage tbody');
+  clearKids(tbody);
+  for (const r of rows) {
+    const rowCls = r.stage === '_tracker_overhead_' ? 'stage-overhead clickable' : 'clickable';
+    const totalTokens = (r.input_tokens || 0) + (r.cache_creation_tokens || 0)
+                      + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
+    const tr = mkRow([
+      r.stage, r.sessions, r.turns,
+      fmt(r.input_tokens), fmt(r.cache_creation_tokens),
+      fmt(r.cache_read_tokens), fmt(r.output_tokens),
+      fmt(totalTokens),
+      '$' + (r.cost?.total_usd ?? 0).toFixed(2),
+      fmtCacheHit(r.cache_hit_rate),
+      { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
+    ], rowCls);
+    tr.addEventListener('click', () => toggleBreakdown(tr, 'stage', r.stage, 11));
+    tbody.appendChild(tr);
+  }
+}
+
+function renderProjectTable(rows) {
+  rowCache['t-project'] = rows;
+  const tbody = $('#t-project tbody');
+  clearKids(tbody);
+  const show = rows && rows.length > 0;
+  $('#t-project').style.display = show ? '' : 'none';
+  $('#h-project').style.display = show ? '' : 'none';
+  if (!show) return;
+  rows = applySort('t-project', rows);
+  markSortHeader('t-project');
+  for (const r of rows.slice(0, 20)) {
+    const name = r.display_name || r.project_name || r.project_path || '(unknown)';
+    const shortenPath = (p) => {
+      if (!p || !p.startsWith('/')) return p;
+      const parts = p.split('/').filter(Boolean);
+      if (parts.length <= 2) return p;
+      return '…/' + parts.slice(-2).join('/');
+    };
+    const label = r.project_name ? name : shortenPath(name) + ' (path)';
+    const tr = mkRow([
+      { text: label, title: r.project_path || '' },
+      r.sessions, r.turns,
+      fmt(r.total_tokens),
+      '$' + (r.cost?.total_usd ?? 0).toFixed(2),
+      fmtCacheHit(r.cache_hit_rate),
+      { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
+    ], 'clickable');
+    const drillKey = r.project_name || name;
+    tr.addEventListener('click', () => drillIntoProject(label, drillKey));
+    tbody.appendChild(tr);
+  }
+}
+
+function renderModelTable(rows) {
+  rowCache['t-model'] = rows;
+  const tbody = $('#t-model tbody');
+  clearKids(tbody);
+  const show = rows && rows.length > 0;
+  $('#t-model').style.display = show ? '' : 'none';
+  $('#h-model').style.display = show ? '' : 'none';
+  if (!show) return;
+  rows = applySort('t-model', rows);
+  markSortHeader('t-model');
+  for (const r of rows) {
+    tbody.appendChild(mkRow([
+      r.model,
+      fmt(r.total_tokens),
+      fmt(r.input_tokens),
+      fmt(r.cache_read_tokens),
+      fmt(r.output_tokens),
+      '$' + (r.cost?.total_usd ?? 0).toFixed(2),
+      fmtCacheHit(r.cache_hit_rate),
+    ]));
+  }
+}
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function renderSparkline(rows) {
+  const wrap = $('#sparkline-wrap');
+  clearKids(wrap);
+  if (!rows || rows.length === 0) return;
+
+  const W = 720, H = 150, ml = 48, mr = 12, mt = 14, mb = 26;
+  const plotW = W - ml - mr, plotH = H - mt - mb;
+  // Defensive: coerce missing fields to 0 so a data-shape change degrades to
+  // visible zero-height bars rather than silently blank (NaN > 0 === false).
+  rows = rows.map(r => ({
+    day: r.day || '',
+    user: r.user || 0,
+    subagent: r.subagent || 0,
+    total: r.total || ((r.user || 0) + (r.subagent || 0)),
+  }));
+  const n = rows.length;
+  const peak = Math.max(1, ...rows.map(r => r.total));
+  const avg = rows.reduce((s, r) => s + r.total, 0) / n;
+  const slot = plotW / n, gap = 2, bw = Math.max(1, slot - gap);
+  const BLUE = '#64a0ff', ORANGE = '#FB8C00', DIM = 'rgb(136,136,136)', GRID = 'rgba(255,255,255,0.08)';
+  const yOf = v => mt + plotH - (v / peak) * plotH;
+
+  const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
+
+  // gridlines + y labels
+  for (const frac of [0, 0.5, 1]) {
+    const v = peak * frac, yy = yOf(v);
+    svg.appendChild(svgEl('line', { x1: ml, y1: yy, x2: W - mr, y2: yy, stroke: GRID, 'stroke-width': 1 }));
+    const t = svgEl('text', { x: ml - 6, y: yy + 3, fill: DIM, 'font-size': 9, 'text-anchor': 'end' });
+    t.textContent = fmt(v); svg.appendChild(t);
+  }
+
+  // bars (stacked: user bottom, subagent on top) + hover targets
+  const tip = $('#spark-tip');
+  rows.forEach((r, i) => {
+    const x = ml + i * slot + gap / 2;
+    const uh = (r.user / peak) * plotH, sh = (r.subagent / peak) * plotH;
+    const uy = mt + plotH - uh, sy = uy - sh;
+    if (uh > 0) svg.appendChild(svgEl('rect', { x, y: uy, width: bw, height: uh, fill: BLUE }));
+    if (sh > 0) svg.appendChild(svgEl('rect', { x, y: sy, width: bw, height: sh, fill: ORANGE }));
+    // transparent full-height hover target
+    const hit = svgEl('rect', { x: ml + i * slot, y: mt, width: slot, height: plotH, fill: 'transparent' });
+    hit.style.cursor = 'crosshair';
+    hit.addEventListener('mousemove', (e) => {
+      tip.style.display = 'block';
+      tip.style.left = (e.pageX + 12) + 'px';
+      tip.style.top = (e.pageY - 10) + 'px';
+      tip.textContent = `${r.day} · total ${fmt(r.total)} (user ${fmt(r.user)} / sub ${fmt(r.subagent)})`;
+    });
+    hit.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+    svg.appendChild(hit);
+  });
+
+  // average baseline
+  const ay = yOf(avg);
+  svg.appendChild(svgEl('line', { x1: ml, y1: ay, x2: W - mr, y2: ay, stroke: DIM, 'stroke-width': 1, 'stroke-dasharray': '3,3' }));
+  const at = svgEl('text', { x: W - mr, y: ay - 3, fill: DIM, 'font-size': 9, 'text-anchor': 'end' });
+  at.textContent = `avg ${fmt(avg)}`; svg.appendChild(at);
+
+  // x date ticks
+  for (const idx of new Set([0, n >> 1, n - 1])) {
+    if (idx < 0 || idx >= n) continue;
+    const x = ml + idx * slot + bw / 2;
+    const t = svgEl('text', { x, y: H - 8, fill: DIM, 'font-size': 9, 'text-anchor': 'middle' });
+    t.textContent = rows[idx].day.slice(5); svg.appendChild(t);
+  }
+
+  // legend
+  const lg = (lx, color, label) => {
+    svg.appendChild(svgEl('rect', { x: lx, y: 2, width: 9, height: 9, fill: color }));
+    const t = svgEl('text', { x: lx + 13, y: 10, fill: DIM, 'font-size': 9 });
+    t.textContent = label; svg.appendChild(t);
+  };
+  lg(ml, BLUE, 'user'); lg(ml + 52, ORANGE, 'subagent');
+
+  const cap = mkEl('div', '30d daily tokens — user vs subagent', 'spark-label');
+  wrap.appendChild(cap);
+  wrap.appendChild(svg);
+}
+
+function renderAgentTable(rows) {
+  const tbody = $('#t-agent tbody');
+  clearKids(tbody);
+  const show = rows && rows.length > 1;
+  $('#t-agent').style.display = show ? '' : 'none';
+  $('#h-agent').style.display = show ? '' : 'none';
+  if (!show) return;
+  for (const r of rows) {
+    const tr = mkRow([
+      r.agent_type, r.sessions, r.turns,
+      fmt(r.total_tokens),
+      fmt(r.total_tokens / (r.sessions || 1)),
+    ], 'clickable');
+    tr.addEventListener('click', () => toggleBreakdown(tr, 'agent_type', r.agent_type, 5));
+    tbody.appendChild(tr);
+  }
+}
+
+function shortenPath(p) {
+  if (!p || !p.startsWith('/')) return p;
+  const parts = p.split('/').filter(Boolean);
+  if (parts.length <= 2) return p;
+  return '…/' + parts.slice(-2).join('/');
+}
+
+async function toggleBreakdown(parentTr, dim, key, colspan) {
+  const next = parentTr.nextElementSibling;
+  if (next && next.classList.contains('breakdown-row') && next.dataset.for === key) {
+    next.remove();
+    return;
+  }
+  const tbody = parentTr.parentElement;
+  tbody.querySelectorAll('tr.breakdown-row').forEach(n => n.remove());
+
+  const tr = document.createElement('tr');
+  tr.className = 'breakdown-row';
+  tr.dataset.for = key;
+  const td = document.createElement('td');
+  td.colSpan = colspan;
+  td.className = 'breakdown-cell';
+  td.textContent = 'loading project breakdown…';
+  tr.appendChild(td);
+  parentTr.after(tr);
+
+  try {
+    const since = $('#f-since').value;
+    const url = '/api/projects-for?dim=' + encodeURIComponent(dim)
+              + '&key=' + encodeURIComponent(key)
+              + '&since=' + encodeURIComponent(since);
+    const resp = await fetch(url);
+    const d = await resp.json();
+    clearKids(td);
+    if (!d.projects || d.projects.length === 0) {
+      td.textContent = '(no project breakdown available)';
+      return;
+    }
+    const inner = document.createElement('table');
+    inner.className = 'inner-breakdown';
+    const thead = document.createElement('thead');
+    const htr = document.createElement('tr');
+    for (const h of ['project', 'sess', 'turns', 'tokens', 'cost', '%']) {
+      htr.appendChild(mkEl('th', h));
+    }
+    thead.appendChild(htr);
+    inner.appendChild(thead);
+    const ibody = document.createElement('tbody');
+    for (const p of d.projects.slice(0, 12)) {
+      const name = p.display_name || p.project_name || p.project_path || '(unknown)';
+      const label = p.project_name ? name : shortenPath(name) + ' (path)';
+      ibody.appendChild(mkRow([
+        { text: label, title: p.project_path || '' },
+        p.sessions, p.turns,
+        fmt(p.total_tokens),
+        '$' + (p.cost?.total_usd ?? 0).toFixed(2),
+        { text: (p.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
+      ]));
+    }
+    inner.appendChild(ibody);
+    td.appendChild(inner);
+  } catch(e) {
+    td.textContent = 'error: ' + e.message;
+  }
+}
+
+let currentSessions = [];
+
+function renderSessions(sessions) {
+  const tbody = $('#t-sessions tbody');
+  clearKids(tbody);
+  const q = ($('#f-session-search')?.value || '').trim().toLowerCase();
+  const filtered = q
+    ? sessions.filter(s => {
+        const hay = ((s.display_label || '') + ' ' + (s.first_user_message || '') + ' '
+                   + (s.session_id || '') + ' ' + (s.stage || '')).toLowerCase();
+        return hay.includes(q);
+      })
+    : sessions;
+  if (filtered.length === 0) {
+    tbody.appendChild(mkRow([q ? '(no matches)' : '(no sessions)', '', '', '', '', '', '']));
+    return;
+  }
+  for (const s of filtered) {
+    const stage = s.stage || 'adhoc';
+    const shortId = s.session_id ? s.session_id.slice(0, 8) + '…' : '—';
+    const displayName = (s.display_label && s.display_label !== '(no title)') ? s.display_label : null;
+    const rawName = s.ai_title || s.first_user_message || displayName || '';
+    const tr = mkRow([
+      fmtDate(s.started_at),
+      { text: stage, title: stage },
+      s.turns,
+      fmt(s.total_tokens),
+      '$' + (s.cost?.total_usd ?? 0).toFixed(3),
+      fmt(s.cache_read_tokens),
+      '',
+    ]);
+    const idCell = tr.lastElementChild;
+    idCell.className = 'session-id';
+    idCell.replaceChildren();
+    if (displayName) {
+      const nameEl = document.createElement('span');
+      nameEl.className = 'session-name';
+      nameEl.textContent = displayName;
+      nameEl.title = rawName;
+      idCell.appendChild(nameEl);
+      idCell.appendChild(document.createElement('br'));
+    }
+    const subId = document.createElement('span');
+    subId.className = 'session-sub-id';
+    subId.textContent = shortId;
+    idCell.appendChild(subId);
+    idCell.title = 'Click to copy: ' + (s.session_id || '');
+    idCell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(s.session_id || '').then(() => {
+        const orig = subId.textContent;
+        subId.textContent = 'copied!';
+        setTimeout(() => { subId.textContent = orig; }, 1200);
+      });
+    });
+    tbody.appendChild(tr);
+  }
+}
+
+async function drillIntoProject(label, projectKey) {
+  const since = $('#f-since').value;
+  $('#drill-project-label').textContent = label;
+  $('#panel-overview').style.display = 'none';
+  $('#panel-sessions').style.display = 'block';
+  if ($('#f-session-search')) $('#f-session-search').value = '';
+
+  const tbody = $('#t-sessions tbody');
+  clearKids(tbody);
+  tbody.appendChild(mkRow(['loading…', '', '', '', '', '', '']));
+
+  try {
+    const url = '/api/sessions?project=' + encodeURIComponent(projectKey) + '&since=' + encodeURIComponent(since);
+    const resp = await fetch(url);
+    const d = await resp.json();
+    currentSessions = d.sessions || [];
+    renderSessions(currentSessions);
+  } catch(e) {
+    clearKids(tbody);
+    tbody.appendChild(mkRow(['error: ' + e.message, '', '', '', '', '', '']));
+  }
+}
+
+function showOverview() {
+  $('#panel-sessions').style.display = 'none';
+  $('#panel-overview').style.display = '';
+}
+
+$('#back-link').addEventListener('click', showOverview);
+$('#f-session-search') && $('#f-session-search').addEventListener('input', () => renderSessions(currentSessions));
+
+async function load() {
+  const project = $('#f-project').value.trim();
+  const since = $('#f-since').value;
+  const kind = $('#f-kind') ? $('#f-kind').value : 'user';
+  const url = '/api/summary?since=' + encodeURIComponent(since)
+            + '&kind=' + encodeURIComponent(kind)
+            + (project ? '&project=' + encodeURIComponent(project) : '');
+  try {
+    const resp = await fetch(url);
+    const d = await resp.json();
+    renderHero(d.totals);
+    renderSparkline(d.sparkline);
+    renderStageTable(d.by_stage);
+    renderProjectTable(d.by_project);
+    renderModelTable(d.by_model);
+    renderAgentTable(d.by_agent_type);
+    $('#live-text').textContent = 'live';
+    $('#live-dot').classList.remove('stale');
+    $('#footer').textContent = 'updated ' + new Date().toLocaleTimeString() + ' · auto-refresh 30s · click project row to drill into sessions';
+  } catch (e) {
+    $('#live-text').textContent = 'stale';
+    $('#live-dot').classList.add('stale');
+    console.error(e);
+  }
+}
+
+// Register sortable columns (col index → value accessor).
+enableSort('t-project', {
+  0: r => (r.display_name || r.project_name || r.project_path || ''),
+  1: r => r.sessions, 2: r => r.turns, 3: r => r.total_tokens,
+  4: r => r.cost?.total_usd ?? 0, 5: r => r.cache_hit_rate ?? -1,
+  6: r => r.pct_of_total ?? 0,
+}, renderProjectTable);
+enableSort('t-model', {
+  0: r => r.model, 1: r => r.total_tokens, 2: r => r.input_tokens,
+  3: r => r.cache_read_tokens, 4: r => r.output_tokens,
+  5: r => r.cost?.total_usd ?? 0, 6: r => r.cache_hit_rate ?? -1,
+}, renderModelTable);
+
+$('#refresh').addEventListener('click', load);
+$('#f-project').addEventListener('change', load);
+$('#f-since').addEventListener('change', load);
+$('#f-kind') && $('#f-kind').addEventListener('change', load);
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

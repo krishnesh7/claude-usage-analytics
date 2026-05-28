@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Usage — {{ filters.project or 'all projects' }}</title>
+<style>
+  :root {
+    --ivory: #FAF9F5;
+    --term-bg: #1a1918;
+    --term-fg: #d1cfc5;
+    --titlebar: #252321;
+    --outline: rgba(255,255,255,0.08);
+    --clay: #D97757;
+    --dim: rgb(136,136,136);
+    --subtle: rgb(80,80,80);
+    --green: rgb(78,186,101);
+    --red: rgb(255,107,128);
+    --blue: rgb(177,185,249);
+    --yellow: rgb(255,193,7);
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--ivory); margin: 0; }
+  body { padding: 32px 24px 64px; font: 13px/1.5 var(--mono); color: var(--term-fg); font-variant-numeric: tabular-nums; }
+  .term { max-width: 1280px; margin: 0 auto; background: var(--term-bg); border-radius: 8px; outline: 1px solid var(--outline); box-shadow: 0 20px 60px rgba(20,20,19,0.22); }
+  .titlebar { background: var(--titlebar); border-radius: 8px 8px 0 0; padding: 11px 14px; display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--outline); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: #3a3836; }
+  .path { margin-left: 14px; color: var(--dim); font-size: 11px; }
+  .term-body { padding: 22px 30px 30px; }
+  .cmd { color: var(--dim); margin-bottom: 4px; }
+  .cmd .prompt { color: var(--clay); }
+  .cmd .flag { color: var(--blue); }
+  .hero { font-size: 48px; font-weight: 700; line-height: 1; margin: 12px 0 4px; }
+  .hero .unit { color: var(--clay); }
+  .hero .sub { font-size: 14px; font-weight: 400; color: var(--dim); margin-left: 10px; }
+  .hero-split { color: var(--dim); margin-top: 8px; }
+  .hero-split b { color: var(--term-fg); font-weight: 500; }
+  .hero-split .ok { color: var(--green); }
+  .hero-split .warn { color: var(--yellow); }
+  .hero-split .red { color: var(--red); }
+  section { margin-top: 28px; }
+  h2 { all: unset; display: block; color: var(--clay); font-weight: 500; }
+  h2::before { content: '▸ '; }
+  h2 .hint { color: var(--subtle); font-size: 11px; font-weight: 400; margin-left: 10px; }
+  .hr { color: var(--subtle); overflow: hidden; white-space: nowrap; user-select: none; margin-bottom: 8px; }
+  .hr::after { content: '─────────────────────────────────────────────────────────────────────────────────────────────────────────────────'; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+  th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  th { color: var(--dim); font-weight: 500; text-align: right; font-size: 11px; text-transform: lowercase; letter-spacing: 0.4px; }
+  th:first-child, td:first-child { text-align: left; }
+  tr:hover td { background: rgba(255,255,255,0.025); }
+  .stage-overhead { color: var(--yellow); }
+  .stage-overhead td:first-child::before { content: '⟳ '; }
+  .num { color: var(--term-fg); }
+  .dim { color: var(--dim); }
+  td.ok { color: var(--green); }
+  td.warn { color: var(--yellow); }
+  td.red { color: var(--red); }
+  .spark { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .spark-label { color: var(--dim); font-size: 11px; }
+  .cost { color: var(--green); }
+  .cost.large { color: var(--yellow); }
+  .cost.huge { color: var(--red); }
+  .takes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin: 14px 0 6px; }
+  .take { background: rgba(255,255,255,0.025); border-left: 3px solid var(--dim); padding: 10px 12px; border-radius: 0 4px 4px 0; }
+  .take.good { border-left-color: var(--green); }
+  .take.warn { border-left-color: var(--yellow); }
+  .take.bad { border-left-color: var(--red); }
+  .take .fig { font-size: 22px; font-weight: 700; }
+  .take .fig.good { color: var(--green); }
+  .take .fig.warn { color: var(--yellow); }
+  .take .fig.bad { color: var(--red); }
+  .take .txt { color: var(--dim); font-size: 11.5px; margin-top: 4px; }
+  .take .txt b { color: var(--term-fg); }
+  footer { color: var(--subtle); font-size: 11px; margin-top: 28px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="term">
+  <div class="titlebar">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <span class="path">~ • claude-usage-report.html</span>
+  </div>
+  <div class="term-body">
+    <div class="cmd"><span class="prompt">$</span> cu report
+      {% if filters.project %}<span class="flag">--project</span> {{ filters.project }}{% endif %}
+      <span class="flag">--since</span> {{ filters.since }}
+      <span class="flag">--kind</span> {{ filters.kind }}
+    </div>
+
+    <div class="hero">
+      ${{ "%.2f"|format(totals.cost.total_usd) }}<span class="sub">imputed cost · {{ totals.since_label }} · {{ filters.kind }} sessions</span>
+    </div>
+    <div class="hero-split">
+      <b>{{ totals.total_tokens_h }}</b> tokens across <b>{{ totals.sessions }}</b> sessions ·
+      input <b>{{ totals.input_tokens_h }}</b> ·
+      output <b>{{ totals.output_tokens_h }}</b> ·
+      cache-write <b>{{ totals.cache_creation_tokens_h }}</b> ·
+      cache-read <span class="ok">{{ totals.cache_read_tokens_h }}</span>
+      {% if totals.cache_hit_rate is not none %} ·
+      cache hit <span class="{{ 'ok' if totals.cache_hit_rate >= 0.85 else 'warn' if totals.cache_hit_rate >= 0.5 else 'red' }}">{{ "%.1f"|format(totals.cache_hit_rate * 100) }}%</span>
+      {% endif %}
+    </div>
+    {% if sparkline_svg %}
+    <div class="spark"><span class="spark-label">30d daily tokens — user vs subagent</span></div>
+    <div class="spark-chart">{{ sparkline_svg|safe }}</div>
+    {% endif %}
+
+    {% if takes %}
+    <section>
+      <h2>headline</h2>
+      <div class="hr"></div>
+      <div class="takes">
+        {% for t in takes %}
+        <div class="take {{ t.cls }}"><div class="fig {{ t.cls }}">{{ t.fig }}</div><div class="txt">{{ t.txt|safe }}</div></div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section>
+      <h2>by SDLC stage</h2>
+      <div class="hr"></div>
+      <table>
+        <thead><tr>
+          <th>stage</th><th>sess</th><th>turns</th><th>input</th><th>cache·write</th><th>cache·read</th><th>output</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th>
+        </tr></thead>
+        <tbody>
+          {% for r in by_stage %}
+          <tr class="{{ 'stage-overhead' if r.stage == '_tracker_overhead_' else '' }}">
+            <td>{{ r.stage }}</td>
+            <td>{{ r.sessions }}</td>
+            <td>{{ r.turns }}</td>
+            <td>{{ r.input_tokens_h }}</td>
+            <td>{{ r.cache_creation_tokens_h }}</td>
+            <td>{{ r.cache_read_tokens_h }}</td>
+            <td>{{ r.output_tokens_h }}</td>
+            <td class="num">{{ r.total_tokens_h }}</td>
+            <td class="cost {{ 'huge' if r.cost.total_usd > 100 else 'large' if r.cost.total_usd > 10 else '' }}">${{ "%.2f"|format(r.cost.total_usd) }}</td>
+            <td class="{{ 'ok' if r.cache_hit_rate is not none and r.cache_hit_rate >= 0.85 else 'warn' if r.cache_hit_rate is not none and r.cache_hit_rate >= 0.5 else 'red' if r.cache_hit_rate is not none else 'dim' }}">{{ ("%.0f%%"|format(r.cache_hit_rate * 100)) if r.cache_hit_rate is not none else '—' }}</td>
+            <td class="dim">{{ "%.1f"|format(r.pct_of_total) }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    {% if by_project %}
+    <section>
+      <h2>by project</h2>
+      <div class="hr"></div>
+      <table>
+        <thead><tr><th>project</th><th>sess</th><th>turns</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th></tr></thead>
+        <tbody>
+          {% for r in by_project %}
+          <tr>
+            <td title="{{ r.project_path }}">{{ r.label }}</td>
+            <td>{{ r.sessions }}</td>
+            <td>{{ r.turns }}</td>
+            <td>{{ r.total_tokens_h }}</td>
+            <td class="cost {{ 'huge' if r.cost.total_usd > 100 else 'large' if r.cost.total_usd > 10 else '' }}">${{ "%.2f"|format(r.cost.total_usd) }}</td>
+            <td class="{{ 'ok' if r.cache_hit_rate is not none and r.cache_hit_rate >= 0.85 else 'warn' if r.cache_hit_rate is not none and r.cache_hit_rate >= 0.5 else 'red' if r.cache_hit_rate is not none else 'dim' }}">{{ ("%.0f%%"|format(r.cache_hit_rate * 100)) if r.cache_hit_rate is not none else '—' }}</td>
+            <td class="dim">{{ "%.1f"|format(r.pct_of_total) }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    {% if by_model %}
+    <section>
+      <h2>by model</h2>
+      <div class="hr"></div>
+      <table>
+        <thead><tr><th>model</th><th>tokens</th><th>input</th><th>cache·read</th><th>output</th><th>cost</th><th>cache·hit</th></tr></thead>
+        <tbody>
+          {% for r in by_model %}
+          <tr>
+            <td>{{ r.model }}</td>
+            <td>{{ r.total_tokens_h }}</td>
+            <td>{{ r.input_tokens_h }}</td>
+            <td>{{ r.cache_read_tokens_h }}</td>
+            <td>{{ r.output_tokens_h }}</td>
+            <td class="cost {{ 'huge' if r.cost.total_usd > 100 else 'large' if r.cost.total_usd > 10 else '' }}">${{ "%.2f"|format(r.cost.total_usd) }}</td>
+            <td class="{{ 'ok' if r.cache_hit_rate is not none and r.cache_hit_rate >= 0.85 else 'warn' if r.cache_hit_rate is not none and r.cache_hit_rate >= 0.5 else 'red' if r.cache_hit_rate is not none else 'dim' }}">{{ ("%.0f%%"|format(r.cache_hit_rate * 100)) if r.cache_hit_rate is not none else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    {% if by_agent_type %}
+    <section>
+      <h2>by agent (subagents)</h2>
+      <div class="hr"></div>
+      <table>
+        <thead><tr><th>agent_type</th><th>sess</th><th>turns</th><th>tokens</th><th>avg/sess</th></tr></thead>
+        <tbody>
+          {% for r in by_agent_type %}
+          <tr><td>{{ r.agent_type }}</td><td>{{ r.sessions }}</td><td>{{ r.turns }}</td><td>{{ r.total_tokens_h }}</td><td class="dim">{{ r.avg_per_session_h }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    {% if top_skills %}
+    <section>
+      <h2>top skills</h2>
+      <div class="hr"></div>
+      <table>
+        <thead><tr><th>skill</th><th>invocations</th><th>sessions</th></tr></thead>
+        <tbody>
+          {% for r in top_skills %}
+          <tr><td>{{ r.skill_name }}</td><td>{{ r.invocations }}</td><td>{{ r.sessions }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    <footer>generated {{ generated_at }} · cu report · prices from ~/.claude/usage/prices.json</footer>
+  </div>
+</div>
+</body>
+</html>

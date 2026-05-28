@@ -29,3 +29,7 @@ report-*.html
 
 # Self-contained plugin data dir (DB, config copies, bootstrap log)
 data/
+
+# Parser Node deps — rebuilt per-machine on bootstrap (native better-sqlite3 binary)
+parser/node_modules/
+node_modules/

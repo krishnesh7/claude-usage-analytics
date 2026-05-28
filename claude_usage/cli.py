@@ -44,7 +44,16 @@ def parse(force: bool, verbose: bool, no_enrich: bool) -> None:
         args.append("--force")
     if verbose:
         args.append("--verbose")
-    result = subprocess.run(args, capture_output=True, text=True)
+    try:
+        result = subprocess.run(args, capture_output=True, text=True)
+    except FileNotFoundError:
+        # Node isn't installed — degrade gracefully instead of a traceback.
+        click.echo(
+            "ERROR: 'node' not found on PATH. Install Node.js to parse new "
+            "sessions; existing data still displays.",
+            err=True,
+        )
+        sys.exit(3)
     if result.returncode != 0:
         click.echo(result.stderr, err=True)
         sys.exit(result.returncode)

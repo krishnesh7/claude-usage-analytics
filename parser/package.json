@@ -1,0 +1,16 @@
+{
+  "name": "claude-usage-parser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Parses ~/.claude/projects/**/*.jsonl into ~/.claude/usage/usage.db (SQLite). Zero LLM cost; pure Node.",
+  "bin": {
+    "claude-usage-parse": "./parse.mjs"
+  },
+  "scripts": {
+    "parse": "node parse.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0"
+  }
+}

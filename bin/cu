@@ -74,6 +74,31 @@ bootstrap() {
   log "bootstrap complete"
 }
 
+PARSER_DIR="$ROOT/parser"
+NPM_LOCK="$DATA_DIR/.npm.lock"
+
+ensure_parser_deps() {
+  # The parser imports better-sqlite3 (a native Node module). Install it once,
+  # lock-guarded. Self-heals independently of the Python venv: a machine can
+  # have the venv but not the parser deps (or vice-versa). No-op if already
+  # present or if node/npm are unavailable (the parse preflight warns instead).
+  [ -d "$PARSER_DIR/node_modules/better-sqlite3" ] && return 0
+  command -v node >/dev/null 2>&1 || return 0
+  command -v npm  >/dev/null 2>&1 || { log "npm not found — parser deps not installed"; return 0; }
+  if mkdir "$NPM_LOCK" 2>/dev/null; then
+    log "installing parser Node deps (better-sqlite3) — one-time native build…"
+    ( cd "$PARSER_DIR" && npm install --silent --no-audit --no-fund ) >>"$LOG" 2>&1 \
+      || log "WARN: npm install failed (see $LOG); 'cu parse' will be unavailable"
+    rmdir "$NPM_LOCK" 2>/dev/null || true
+  else
+    # Another process is installing — wait for it (max ~120s).
+    for _ in $(seq 1 120); do
+      [ -d "$PARSER_DIR/node_modules/better-sqlite3" ] && break
+      sleep 1
+    done
+  fi
+}
+
 # ── Bootstrap if needed (lock-guarded against concurrent sessions) ───────────
 if [ ! -x "$CU_REAL" ]; then
   # mkdir is atomic — only one racer wins the lock and bootstraps.
@@ -96,6 +121,17 @@ if [ ! -x "$CU_REAL" ]; then
 else
   # Fast path: still make sure config is seeded (cheap, idempotent).
   seed_config
+fi
+
+# Parser Node deps self-heal on every run (cheap dir check when already present).
+ensure_parser_deps
+
+# ── Preflight: the parser needs Node. Only `cu parse` uses it, so warn (to
+# stderr, never stdout) just for that subcommand. Without Node the DB never
+# populates and every report silently shows zeros — make that failure legible.
+if [ "${1:-}" = "parse" ] && ! command -v node >/dev/null 2>&1; then
+  echo "cu: 'node' not found on PATH — the parser can't run, so usage data won't update." >&2
+  echo "cu: install Node.js (https://nodejs.org) and re-run; existing data still displays." >&2
 fi
 
 exec "$CU_REAL" "$@"

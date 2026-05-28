@@ -26,8 +26,15 @@ import readline from 'node:readline'
 import Database from 'better-sqlite3'
 
 const HOME = os.homedir()
+// Data dir resolution MUST mirror Python's paths.py so the parser (writer) and
+// the CLI/dashboard (reader) agree on where usage.db lives:
+//   CU_DATA_DIR  >  ${CLAUDE_PLUGIN_ROOT}/data  >  legacy ~/.claude/usage
+const USAGE_DIR = process.env.CU_DATA_DIR
+  ? process.env.CU_DATA_DIR
+  : process.env.CLAUDE_PLUGIN_ROOT
+    ? path.join(process.env.CLAUDE_PLUGIN_ROOT, 'data')
+    : path.join(HOME, '.claude', 'usage')
 const PROJECTS_DIR = path.join(HOME, '.claude', 'projects')
-const USAGE_DIR = path.join(HOME, '.claude', 'usage')
 const DB_PATH = path.join(USAGE_DIR, 'usage.db')
 const STAGE_MAP_PATH = path.join(USAGE_DIR, 'stage_map.json')
 const PROJECTS_PATH = path.join(USAGE_DIR, 'projects.json')

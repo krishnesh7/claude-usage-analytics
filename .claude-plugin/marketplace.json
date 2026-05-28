@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
+  "name": "claude-usage-analytics",
+  "description": "Local-first token usage & imputed cost analytics for Claude Code.",
+  "owner": {
+    "name": "Krishnesh Pujari"
+  },
+  "plugins": [
+    {
+      "name": "claude-usage-analytics",
+      "description": "Local-first token usage & imputed cost analytics for Claude Code. Offline parser + SQLite + live dashboard and static reports, with session-kind/SDLC classification, secret redaction, and per-project attribution. Self-bootstrapping Python; near-zero LLM overhead.",
+      "author": {
+        "name": "Krishnesh Pujari"
+      },
+      "source": ".",
+      "category": "productivity"
+    }
+  ]
+}

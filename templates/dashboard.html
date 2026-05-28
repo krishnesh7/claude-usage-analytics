@@ -365,12 +365,12 @@ function svgEl(tag, attrs) {
   return e;
 }
 
-function renderSparkline(rows) {
+function renderSparkline(rows, since) {
   const wrap = $('#sparkline-wrap');
   clearKids(wrap);
   if (!rows || rows.length === 0) return;
 
-  const W = 720, H = 150, ml = 48, mr = 12, mt = 14, mb = 26;
+  const W = 1200, H = 150, ml = 48, mr = 12, mt = 14, mb = 26;
   const plotW = W - ml - mr, plotH = H - mt - mb;
   // Defensive: coerce missing fields to 0 so a data-shape change degrades to
   // visible zero-height bars rather than silently blank (NaN > 0 === false).
@@ -387,7 +387,7 @@ function renderSparkline(rows) {
   const BLUE = '#64a0ff', ORANGE = '#FB8C00', DIM = 'rgb(136,136,136)', GRID = 'rgba(255,255,255,0.08)';
   const yOf = v => mt + plotH - (v / peak) * plotH;
 
-  const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` });
+  const svg = svgEl('svg', { width: '100%', height: H, viewBox: `0 0 ${W} ${H}` });
 
   // gridlines + y labels
   for (const frac of [0, 0.5, 1]) {
@@ -440,7 +440,8 @@ function renderSparkline(rows) {
   };
   lg(ml, BLUE, 'user'); lg(ml + 52, ORANGE, 'subagent');
 
-  const cap = mkEl('div', '30d daily tokens — user vs subagent', 'spark-label');
+  const sinceLabel = { '24h': '24h', '7d': '7d', '30d': '30d', 'all': 'all-time' }[since] || since || '30d';
+  const cap = mkEl('div', `${sinceLabel} daily tokens — user vs subagent`, 'spark-label');
   wrap.appendChild(cap);
   wrap.appendChild(svg);
 }
@@ -630,7 +631,7 @@ async function load() {
     const resp = await fetch(url);
     const d = await resp.json();
     renderHero(d.totals);
-    renderSparkline(d.sparkline);
+    renderSparkline(d.sparkline, since);
     renderStageTable(d.by_stage);
     renderProjectTable(d.by_project);
     renderModelTable(d.by_model);

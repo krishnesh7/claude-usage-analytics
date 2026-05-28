@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# cu — lazy-bootstrapping launcher for claude-usage-analytics.
+#
+# On first invocation it creates a private venv inside the plugin and installs
+# the package (and its deps) into it, then execs the real `cu`. Subsequent calls
+# skip straight to exec. All bootstrap noise goes to a log file + stderr, never
+# stdout — hooks and commands parse cu's stdout, so it must stay clean.
+#
+# Self-contained data dir: unless CU_DATA_DIR is set, data lives under the
+# plugin's own data/ dir. On first bootstrap we migrate any existing
+# ~/.claude/usage history so upgraders keep their sessions.
+set -uo pipefail
+
+# ── Resolve plugin root ──────────────────────────────────────────────────────
+# Prefer CLAUDE_PLUGIN_ROOT (set when running as an installed plugin); otherwise
+# derive from this script's location (bin/cu → repo root) for dev checkouts.
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  ROOT="$CLAUDE_PLUGIN_ROOT"
+else
+  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  export CLAUDE_PLUGIN_ROOT="$ROOT"
+fi
+
+VENV="$ROOT/.venv"
+PYBIN="$VENV/bin/python"
+CU_REAL="$VENV/bin/cu"
+DATA_DIR="${CU_DATA_DIR:-$ROOT/data}"
+LOG="$DATA_DIR/bootstrap.log"
+LOCK="$DATA_DIR/.bootstrap.lock"
+
+mkdir -p "$DATA_DIR"
+
+log() { printf '[cu-bootstrap] %s\n' "$*" >> "$LOG"; printf '[cu-bootstrap] %s\n' "$*" >&2; }
+
+find_python() {
+  for c in python3.12 python3.11 python3.10 python3 python; do
+    if command -v "$c" >/dev/null 2>&1; then echo "$c"; return 0; fi
+  done
+  return 1
+}
+
+migrate_legacy() {
+  # One-time: pull existing history out of ~/.claude/usage into the data dir.
+  local legacy="$HOME/.claude/usage"
+  [ "$DATA_DIR" = "$legacy" ] && return 0
+  [ -f "$DATA_DIR/usage.db" ] && return 0   # already have data; don't clobber
+  if [ -f "$legacy/usage.db" ]; then
+    log "migrating existing history from $legacy"
+    for f in usage.db usage.db-wal usage.db-shm projects.json prices.json stage_map.json stage_keywords.json enriched-cache.json; do
+      [ -f "$legacy/$f" ] && cp -p "$legacy/$f" "$DATA_DIR/$f" 2>/dev/null || true
+    done
+  fi
+}
+
+seed_config() {
+  # Ensure required config files exist; seed from the plugin's bundled defaults.
+  for f in prices.json stage_keywords.json stage_map.json; do
+    if [ ! -f "$DATA_DIR/$f" ] && [ -f "$ROOT/config/$f" ]; then
+      cp "$ROOT/config/$f" "$DATA_DIR/$f"
+    fi
+  done
+}
+
+bootstrap() {
+  local py
+  py="$(find_python)" || { log "FATAL: no python3 found on PATH"; exit 127; }
+  log "creating venv at $VENV using $py"
+  "$py" -m venv "$VENV" >>"$LOG" 2>&1 || { log "FATAL: venv creation failed (see $LOG)"; exit 1; }
+  log "installing claude-usage-analytics into venv (this runs once)…"
+  "$VENV/bin/pip" install --quiet --upgrade pip >>"$LOG" 2>&1 || true
+  "$VENV/bin/pip" install --quiet -e "$ROOT" >>"$LOG" 2>&1 || {
+    log "FATAL: pip install failed (see $LOG)"; exit 1;
+  }
+  log "bootstrap complete"
+}
+
+# ── Bootstrap if needed (lock-guarded against concurrent sessions) ───────────
+if [ ! -x "$CU_REAL" ]; then
+  # mkdir is atomic — only one racer wins the lock and bootstraps.
+  if mkdir "$LOCK" 2>/dev/null; then
+    # Clean the lock on any exit. NOTE: the final `exec` replaces this process
+    # before EXIT traps fire, so we ALSO rmdir explicitly right before exec.
+    trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+    migrate_legacy
+    seed_config
+    bootstrap
+    rmdir "$LOCK" 2>/dev/null || true
+  else
+    # Another process is bootstrapping; wait for it (max ~120s).
+    for _ in $(seq 1 120); do
+      [ -x "$CU_REAL" ] && break
+      sleep 1
+    done
+    [ -x "$CU_REAL" ] || { echo "cu: bootstrap timed out; see $LOG" >&2; exit 1; }
+  fi
+else
+  # Fast path: still make sure config is seeded (cheap, idempotent).
+  seed_config
+fi
+
+exec "$CU_REAL" "$@"

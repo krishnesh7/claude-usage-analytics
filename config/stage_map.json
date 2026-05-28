@@ -1,0 +1,7 @@
+{
+  "_comment": "Map a substring of the project working directory to an SDLC stage. The needle is matched against BOTH the decoded path (e.g. '/Users/me/code/myproj') and the on-disk dir name (e.g. '-Users-me-code-myproj'), so either style works. First match wins. Stages: requirements | design | impl | test | deploy | adhoc | _tracker_overhead_. The examples below are illustrative — replace with your own.",
+  "mappings": {
+    "my-saas-app": "impl",
+    "infra-terraform": "deploy"
+  }
+}

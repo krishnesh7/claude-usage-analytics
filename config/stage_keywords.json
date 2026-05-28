@@ -1,0 +1,11 @@
+{
+  "_comment": "Keyword -> stage rules. Classifier scans the first 3 human messages of a session and picks the stage with the most keyword hits. Ties broken by stage order below. All matching is case-insensitive whole-word.",
+  "rules": {
+    "requirements": ["spec", "specification", "requirement", "requirements", "user story", "user stories", "prd", "acceptance criteria", "what should", "use case", "use cases"],
+    "design":       ["architecture", "architect", "design", "designing", "diagram", "schema", "data model", "approach", "tradeoff", "trade-off", "wireframe", "mockup"],
+    "test":         ["test", "tests", "testing", "jest", "pytest", "vitest", "coverage", "tdd", "unit test", "integration test", "e2e", "fixture"],
+    "deploy":       ["deploy", "deployment", "ci", "cd", "pipeline", "release", "rollout", "production", "prod", "kubernetes", "k8s", "docker", "helm", "terraform"],
+    "impl":         ["implement", "implementation", "function", "method", "bug", "fix", "refactor", "endpoint", "component", "module", "feature"]
+  },
+  "tie_break_order": ["test", "deploy", "design", "requirements", "impl"]
+}

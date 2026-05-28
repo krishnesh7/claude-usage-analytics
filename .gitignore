@@ -26,3 +26,6 @@ report-*.html
 *.swp
 .idea/
 .vscode/
+
+# Self-contained plugin data dir (DB, config copies, bootstrap log)
+data/

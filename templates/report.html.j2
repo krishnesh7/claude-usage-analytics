@@ -103,7 +103,7 @@
       {% endif %}
     </div>
     {% if sparkline_svg %}
-    <div class="spark"><span class="spark-label">30d daily tokens — user vs subagent</span></div>
+    <div class="spark"><span class="spark-label">{{ 'all-time' if filters.since == 'all' else filters.since }} daily tokens — user vs subagent</span></div>
     <div class="spark-chart">{{ sparkline_svg|safe }}</div>
     {% endif %}
 

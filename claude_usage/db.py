@@ -377,12 +377,12 @@ def daily_timeline(
 
 def daily_timeline_by_kind(
     project: str | None = None,
-    days: int = 30,
+    since: "datetime | None" = None,
 ) -> list[dict]:
     """Per-day tokens split into user vs subagent buckets, for a stacked trend chart.
 
     'subagent' = sessions with a parent or a ::agent- id; everything else (excluding
-    tracker overhead) counts as 'user'.
+    tracker overhead) counts as 'user'. Pass since=None to include all history.
     """
     where: list[str] = []
     params: list = []
@@ -390,6 +390,9 @@ def daily_timeline_by_kind(
         where.append("(s.project_name = ? OR s.project_path LIKE ? OR s.project_dir LIKE ?)")
         like = f"%{project}%"
         params.extend([project, like, like])
+    if since is not None:
+        where.append("COALESCE(t.ts, s.started_at) >= ?")
+        params.append(since.isoformat())
     tok = "(t.input_tokens + t.cache_creation_tokens + t.cache_read_tokens + t.output_tokens)"
     is_sub = "(s.parent_session_id IS NOT NULL OR s.session_id LIKE '%::agent-%')"
     is_user = ("(s.parent_session_id IS NULL AND s.session_id NOT LIKE '%::agent-%'"
@@ -403,9 +406,6 @@ def daily_timeline_by_kind(
     """
     if where:
         sql += " WHERE " + " AND ".join(where)
-        sql += f" AND date(COALESCE(t.ts, s.started_at)) >= date('now', '-{int(days)} days')"
-    else:
-        sql += f" WHERE date(COALESCE(t.ts, s.started_at)) >= date('now', '-{int(days)} days')"
     sql += " GROUP BY date(COALESCE(t.ts, s.started_at)) ORDER BY day ASC"
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]

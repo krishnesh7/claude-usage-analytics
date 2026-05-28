@@ -183,8 +183,8 @@ def build(project: str | None, since: str, kind: str | None = None) -> dict:
         r["cache_hit_rate"] = _cache_hit_rate(r)
     by_model_list.sort(key=lambda x: x["total_tokens"], reverse=True)
 
-    # 30-day stacked trend (user vs subagent tokens per day)
-    timeline_rows = dbmod.daily_timeline_by_kind(project=project, days=30)
+    # stacked trend (user vs subagent tokens per day), respects the since filter
+    timeline_rows = dbmod.daily_timeline_by_kind(project=project, since=since_dt)
     sparkline = [{
         "day": r["day"],
         "user": r["user_tokens"],

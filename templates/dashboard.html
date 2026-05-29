@@ -34,6 +34,10 @@
   .hero-split .ok { color: var(--green); }
   .hero-split .warn { color: var(--yellow); }
   .hero-split .red { color: var(--red); }
+  .delta { font-size: 12px; font-weight: 400; margin-left: 6px; vertical-align: middle; }
+  .delta-good { color: var(--green); }
+  .delta-bad  { color: var(--red); }
+  .delta-neutral { color: var(--dim); }
   h2 { all: unset; display: block; color: var(--clay); margin-top: 24px; margin-bottom: 2px; }
   h2::before { content: '▸ '; }
   .breadcrumb { color: var(--dim); font-size: 11px; margin-bottom: 6px; margin-top: 4px; }
@@ -45,6 +49,7 @@
   #t-project col.c-name, #t-stage col.c-name, #t-agent col.c-name, #t-sessions col.c-name { width: auto; }
   #t-project col.c-num, #t-stage col.c-num, #t-agent col.c-num, #t-sessions col.c-num { width: 78px; }
   #t-project col.c-pct, #t-stage col.c-pct { width: 56px; }
+  #t-project col.c-delta { width: 78px; }
   tr:hover td { background: rgba(255,255,255,0.025); }
   tr.clickable { cursor: pointer; }
   tr.clickable:hover td { background: rgba(100,160,255,0.07); }
@@ -130,9 +135,9 @@
       <p class="hint">Click a row to drill into individual sessions.</p>
       <table id="t-project">
         <colgroup>
-          <col class="c-name"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-pct">
+          <col class="c-name"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-pct"><col class="c-delta">
         </colgroup>
-        <thead><tr><th>project</th><th>sess</th><th>turns</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th></tr></thead>
+        <thead><tr><th>project</th><th>sess</th><th>turns</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th><th>Δ cost</th></tr></thead>
         <tbody></tbody>
       </table>
 
@@ -273,12 +278,29 @@ function mkRow(cells, rowCls) {
   return tr;
 }
 
-function renderHero(t) {
+function mkDelta(curr, prior, higherIsBetter, fmtFn) {
+  if (prior == null || prior === 0) return null;
+  const delta = curr - prior;
+  const sign = delta >= 0 ? '+' : '';
+  const arrow = delta >= 0 ? ' ↑' : ' ↓';
+  const better = higherIsBetter ? delta > 0 : delta < 0;
+  const cls = 'delta ' + (delta === 0 ? 'delta-neutral' : better ? 'delta-good' : 'delta-bad');
+  return mkEl('span', sign + fmtFn(delta) + arrow, cls);
+}
+
+function renderHero(t, prior) {
   const hero = $('#hero');
   clearKids(hero);
   hero.appendChild(document.createTextNode('$' + (t.cost?.total_usd ?? 0).toFixed(2)));
   const sub = mkEl('span', 'imputed · ' + t.since_label, 'sub');
   hero.appendChild(sub);
+  if (prior != null) {
+    const costDelta = mkDelta(
+      t.cost?.total_usd ?? 0, prior.cost?.total_usd ?? 0,
+      false, v => '$' + Math.abs(v).toFixed(2)
+    );
+    if (costDelta) hero.appendChild(costDelta);
+  }
 
   const split = $('#hero-split');
   clearKids(split);
@@ -296,6 +318,18 @@ function renderHero(t) {
     const pct = (t.cache_hit_rate * 100).toFixed(1) + '%';
     const cls = t.cache_hit_rate >= 0.85 ? 'ok' : t.cache_hit_rate >= 0.5 ? 'warn' : 'red';
     add(' · cache hit '); add(pct, cls);
+  }
+  if (prior != null) {
+    const tokDelta = mkDelta(
+      t.total_tokens ?? 0, prior.total_tokens ?? 0,
+      false, v => fmt(Math.abs(v))
+    );
+    const cacheDelta = mkDelta(
+      t.cache_hit_rate ?? 0, prior.cache_hit_rate ?? 0,
+      true, v => (v * 100).toFixed(1) + '%'
+    );
+    if (tokDelta)   { split.appendChild(document.createTextNode(' ')); split.appendChild(tokDelta); }
+    if (cacheDelta) { split.appendChild(document.createTextNode(' ')); split.appendChild(cacheDelta); }
   }
 }
 
@@ -327,7 +361,7 @@ function renderStageTable(rows) {
   }
 }
 
-function renderProjectTable(rows) {
+function renderProjectTable(rows, priorRows) {
   rowCache['t-project'] = rows;
   const tbody = $('#t-project tbody');
   clearKids(tbody);
@@ -335,6 +369,13 @@ function renderProjectTable(rows) {
   $('#t-project').style.display = show ? '' : 'none';
   $('#h-project').style.display = show ? '' : 'none';
   if (!show) return;
+  const priorByKey = {};
+  if (priorRows) {
+    for (const r of priorRows) {
+      const k = r.project_name || r.display_name || r.project_path;
+      priorByKey[k] = r.cost?.total_usd ?? 0;
+    }
+  }
   rows = applySort('t-project', rows);
   markSortHeader('t-project');
   for (const r of rows.slice(0, 20)) {
@@ -346,6 +387,17 @@ function renderProjectTable(rows) {
       return '…/' + parts.slice(-2).join('/');
     };
     const label = r.project_name ? name : shortenPath(name) + ' (path)';
+    const drillKey = r.project_name || name;
+    const priorCost = priorByKey[drillKey] ?? null;
+    let deltaCell;
+    if (priorCost === null) {
+      deltaCell = { text: '—', cls: 'pct' };
+    } else {
+      const delta = (r.cost?.total_usd ?? 0) - priorCost;
+      const sign = delta >= 0 ? '+' : '';
+      const cls = delta > 0 ? 'pct red' : delta < 0 ? 'pct ok' : 'pct';
+      deltaCell = { text: sign + '$' + Math.abs(delta).toFixed(2), cls };
+    }
     const tr = mkRow([
       { text: label, title: r.project_path || '' },
       r.sessions, r.turns,
@@ -353,8 +405,8 @@ function renderProjectTable(rows) {
       '$' + (r.cost?.total_usd ?? 0).toFixed(2),
       fmtCacheHit(r.cache_hit_rate),
       { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
+      deltaCell,
     ], 'clickable');
-    const drillKey = r.project_name || name;
     tr.addEventListener('click', () => drillIntoProject(label, drillKey));
     tbody.appendChild(tr);
   }
@@ -780,6 +832,17 @@ function validateDateRange() {
   return true;
 }
 
+function renderSkillsTable(rows) {} // stub — replaced in Task 7
+
+function computePriorRange(from, to) {
+  const f = new Date(from + 'T00:00:00Z');
+  const t = new Date(to + 'T23:59:59Z');
+  const dMs = t - f;
+  const priorFrom = new Date(f - dMs).toISOString().slice(0, 10);
+  const priorTo   = new Date(f.getTime() - 1).toISOString().slice(0, 10);
+  return { priorFrom, priorTo };
+}
+
 async function load() {
   const project = $('#f-project').value.trim();
   const from = $('#f-from').value;
@@ -794,15 +857,27 @@ async function load() {
     if (to)   url += '&until=' + encodeURIComponent(to);
   }
   try {
-    const resp = await fetch(url);
+    const fetchCurrent = fetch(url);
+    let fetchPrior = null;
+    if (activePreset !== 'all' && from && to) {
+      const { priorFrom, priorTo } = computePriorRange(from, to);
+      let priorUrl = '/api/summary?kind=' + encodeURIComponent(kind)
+                   + '&since=' + encodeURIComponent(priorFrom)
+                   + '&until=' + encodeURIComponent(priorTo)
+                   + (project ? '&project=' + encodeURIComponent(project) : '');
+      fetchPrior = fetch(priorUrl);
+    }
+    const [resp, priorResp] = await Promise.all([fetchCurrent, fetchPrior || Promise.resolve(null)]);
     const d = await resp.json();
-    renderHero(d.totals);
+    const priorData = priorResp ? await priorResp.json() : null;
+    renderHero(d.totals, priorData ? priorData.totals : null);
     const sinceLabel = activePreset !== 'all' && from ? `${from} → ${to || 'now'}` : 'all-time';
     renderSparkline(d.sparkline, sinceLabel);
     renderStageTable(d.by_stage);
-    renderProjectTable(d.by_project);
+    renderProjectTable(d.by_project, priorData ? priorData.by_project : null);
     renderModelTable(d.by_model);
     renderAgentTable(d.by_agent_type);
+    renderSkillsTable(d.top_skills || []);
     $('#live-text').textContent = 'live';
     $('#live-dot').classList.remove('stale');
     $('#footer').textContent = 'updated ' + new Date().toLocaleTimeString() + ' · auto-refresh 30s · click project row to drill into sessions';
@@ -819,6 +894,7 @@ enableSort('t-project', {
   1: r => r.sessions, 2: r => r.turns, 3: r => r.total_tokens,
   4: r => r.cost?.total_usd ?? 0, 5: r => r.cache_hit_rate ?? -1,
   6: r => r.pct_of_total ?? 0,
+  7: r => r.cost?.total_usd ?? 0,
 }, renderProjectTable);
 enableSort('t-model', {
   0: r => r.model, 1: r => r.total_tokens, 2: r => r.input_tokens,

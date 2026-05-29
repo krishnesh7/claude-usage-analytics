@@ -24,6 +24,9 @@
   .controls input, .controls select, .controls button { background: rgba(255,255,255,0.04); border: 1px solid var(--outline); color: var(--fg); padding: 6px 10px; border-radius: 4px; font: inherit; }
   .controls button { cursor: pointer; }
   .controls button:hover { background: rgba(255,255,255,0.08); }
+  .preset-btn { cursor: pointer; }
+  .preset-btn.active { border-color: var(--blue); color: var(--blue); }
+  .date-err { border-color: var(--red) !important; }
   .hero { font-size: 44px; font-weight: 700; line-height: 1; margin: 8px 0 4px; }
   .hero .sub { font-size: 13px; color: var(--dim); margin-left: 10px; font-weight: 400; }
   .hero-split { color: var(--dim); margin-top: 6px; margin-bottom: 16px; }
@@ -71,6 +74,16 @@
   .session-sub-id { color: var(--blue); font-size: 10px; letter-spacing: 0.3px; }
   .hint { color: var(--dim); font-size: 11px; margin: 4px 0 6px; }
   #panel-sessions { display: none; }
+  #panel-kind { display: none; }
+  .kind-cards { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+  .kind-card { flex: 1; min-width: 200px; background: rgba(255,255,255,0.03); border: 1px solid var(--outline); border-radius: 6px; padding: 16px 20px; cursor: pointer; transition: background 0.12s, border-color 0.12s; }
+  .kind-card:hover { background: rgba(100,160,255,0.07); border-color: rgba(100,160,255,0.3); }
+  .kind-card .kc-label { color: var(--clay); font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .kind-card .kc-label::before { content: '▸ '; }
+  .kind-card .kc-stat { display: flex; justify-content: space-between; color: var(--dim); font-size: 11px; padding: 2px 0; }
+  .kind-card .kc-stat .v { color: var(--fg); }
+  .kind-card .kc-empty { color: var(--dim); font-size: 11px; margin-top: 6px; }
+  .kind-card.kc-disabled { opacity: 0.4; cursor: default; pointer-events: none; }
   tr.breakdown-row td.breakdown-cell { background: rgba(100,160,255,0.04); padding: 10px 22px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); }
   table.inner-breakdown { width: 100%; margin-top: 0; font-size: 12px; table-layout: fixed; }
   table.inner-breakdown th { color: var(--dim); font-size: 10px; padding: 3px 8px; }
@@ -87,14 +100,14 @@
   <div class="term-body">
     <div class="controls">
       <label>project <input id="f-project" placeholder="(all)" style="width: 200px"></label>
-      <label>since
-        <select id="f-since">
-          <option value="24h">24h</option>
-          <option value="7d" selected>7d</option>
-          <option value="30d">30d</option>
-          <option value="all">all</option>
-        </select>
-      </label>
+      <span id="preset-btns">
+        <button class="preset-btn" data-preset="24h">24h</button>
+        <button class="preset-btn active" data-preset="7d">7d</button>
+        <button class="preset-btn" data-preset="30d">30d</button>
+        <button class="preset-btn" data-preset="all">all</button>
+      </span>
+      <label>from <input type="date" id="f-from" style="width:120px"></label>
+      <label>to <input type="date" id="f-to" style="width:120px"></label>
       <label>kind
         <select id="f-kind">
           <option value="user" selected>user only</option>
@@ -144,11 +157,23 @@
       </table>
     </div>
 
+    <!-- Kind selector panel (middle layer) -->
+    <div id="panel-kind">
+      <div class="breadcrumb">
+        <button id="back-link-kind">← all projects</button>
+        <span> / </span><span id="drill-project-label-kind"></span>
+      </div>
+      <h2>session breakdown</h2>
+      <div id="kind-cards" class="kind-cards"></div>
+    </div>
+
     <!-- Sessions drill-down panel -->
     <div id="panel-sessions">
       <div class="breadcrumb">
         <button id="back-link">← all projects</button>
-        <span> / </span><span id="drill-project-label"></span>
+        <span> / </span>
+        <button id="back-link-to-kind" style="background:none;border:none;color:var(--blue);cursor:pointer;font:inherit;padding:0;text-decoration:underline;"></button>
+        <span id="drill-kind-crumb"></span>
       </div>
       <h2>sessions</h2>
       <input id="f-session-search" class="session-search" placeholder="filter sessions by label…">
@@ -491,10 +516,16 @@ async function toggleBreakdown(parentTr, dim, key, colspan) {
   parentTr.after(tr);
 
   try {
-    const since = $('#f-since').value;
-    const url = '/api/projects-for?dim=' + encodeURIComponent(dim)
-              + '&key=' + encodeURIComponent(key)
-              + '&since=' + encodeURIComponent(since);
+    const from = $('#f-from').value;
+    const to = $('#f-to').value;
+    let url = '/api/projects-for?dim=' + encodeURIComponent(dim)
+              + '&key=' + encodeURIComponent(key);
+    if (activePreset === 'all') {
+      url += '&since=all';
+    } else {
+      if (from) url += '&since=' + encodeURIComponent(from);
+      if (to)   url += '&until=' + encodeURIComponent(to);
+    }
     const resp = await fetch(url);
     const d = await resp.json();
     clearKids(td);
@@ -531,6 +562,80 @@ async function toggleBreakdown(parentTr, dim, key, colspan) {
 }
 
 let currentSessions = [];
+let currentKindSessions = [];  // sessions for the currently-selected kind
+
+function _sessionStats(sessions) {
+  const count = sessions.length;
+  const tokens = sessions.reduce((s, r) => s + (r.total_tokens || (
+    (r.input_tokens || 0) + (r.cache_creation_tokens || 0) + (r.cache_read_tokens || 0) + (r.output_tokens || 0)
+  )), 0);
+  const cost = sessions.reduce((s, r) => s + (r.cost?.total_usd ?? 0), 0);
+  const cacheRead = sessions.reduce((s, r) => s + (r.cache_read_tokens || 0), 0);
+  const cacheHit = tokens > 0 ? cacheRead / tokens * 100 : 0;
+  return { count, tokens, cost, cacheHit };
+}
+
+function renderKindPanel(label, allSessions) {
+  const user = allSessions.filter(s => !s.parent_session_id);
+  const subagent = allSessions.filter(s => !!s.parent_session_id);
+
+  const cards = $('#kind-cards');
+  clearKids(cards);
+
+  for (const [kindLabel, kindSessions] of [['user', user], ['subagent', subagent]]) {
+    const card = document.createElement('div');
+    card.className = 'kind-card' + (kindSessions.length === 0 ? ' kc-disabled' : '');
+
+    const lbl = document.createElement('div');
+    lbl.className = 'kc-label';
+    lbl.textContent = kindLabel + ' sessions';
+    card.appendChild(lbl);
+
+    if (kindSessions.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'kc-empty';
+      empty.textContent = 'none';
+      card.appendChild(empty);
+    } else {
+      const st = _sessionStats(kindSessions);
+      for (const [statLabel, val] of [
+        ['sessions', st.count],
+        ['tokens', fmt(st.tokens)],
+        ['cost', '$' + st.cost.toFixed(3)],
+        ['cache hit', st.cacheHit.toFixed(1) + '%'],
+      ]) {
+        const row = document.createElement('div');
+        row.className = 'kc-stat';
+        const kEl = document.createElement('span');
+        kEl.textContent = statLabel;
+        const vEl = document.createElement('span');
+        vEl.className = 'v';
+        vEl.textContent = val;
+        row.appendChild(kEl);
+        row.appendChild(vEl);
+        card.appendChild(row);
+      }
+      card.addEventListener('click', () => drillIntoKind(kindLabel, kindSessions));
+    }
+    cards.appendChild(card);
+  }
+
+  $('#drill-project-label-kind').textContent = label;
+  $('#panel-overview').style.display = 'none';
+  $('#panel-kind').style.display = 'block';
+  $('#panel-sessions').style.display = 'none';
+}
+
+function drillIntoKind(kindLabel, kindSessions) {
+  currentKindSessions = kindSessions;
+  const projectLabel = $('#drill-project-label-kind').textContent;
+  $('#back-link-to-kind').textContent = projectLabel;
+  $('#drill-kind-crumb').textContent = ' / ' + kindLabel;
+  if ($('#f-session-search')) $('#f-session-search').value = '';
+  $('#panel-kind').style.display = 'none';
+  $('#panel-sessions').style.display = 'block';
+  renderSessions(kindSessions);
+}
 
 function renderSessions(sessions) {
   const tbody = $('#t-sessions tbody');
@@ -590,48 +695,108 @@ function renderSessions(sessions) {
 }
 
 async function drillIntoProject(label, projectKey) {
-  const since = $('#f-since').value;
-  $('#drill-project-label').textContent = label;
+  const from = $('#f-from').value;
+  const to = $('#f-to').value;
+  // Show loading state in the kind panel while fetching
+  $('#drill-project-label-kind').textContent = label;
+  clearKids($('#kind-cards'));
+  const loadEl = document.createElement('div');
+  loadEl.style.cssText = 'color:var(--dim);font-size:11px;margin-top:10px';
+  loadEl.textContent = 'loading…';
+  $('#kind-cards').appendChild(loadEl);
   $('#panel-overview').style.display = 'none';
-  $('#panel-sessions').style.display = 'block';
-  if ($('#f-session-search')) $('#f-session-search').value = '';
-
-  const tbody = $('#t-sessions tbody');
-  clearKids(tbody);
-  tbody.appendChild(mkRow(['loading…', '', '', '', '', '', '']));
+  $('#panel-kind').style.display = 'block';
+  $('#panel-sessions').style.display = 'none';
 
   try {
-    const url = '/api/sessions?project=' + encodeURIComponent(projectKey) + '&since=' + encodeURIComponent(since);
+    let sesUrl = '/api/sessions?project=' + encodeURIComponent(projectKey);
+    if (activePreset !== 'all') {
+      if (from) sesUrl += '&since=' + encodeURIComponent(from);
+      if (to)   sesUrl += '&until=' + encodeURIComponent(to);
+    }
+    const url = sesUrl;
     const resp = await fetch(url);
     const d = await resp.json();
     currentSessions = d.sessions || [];
-    renderSessions(currentSessions);
+    renderKindPanel(label, currentSessions);
   } catch(e) {
-    clearKids(tbody);
-    tbody.appendChild(mkRow(['error: ' + e.message, '', '', '', '', '', '']));
+    clearKids($('#kind-cards'));
+    const errEl = document.createElement('div');
+    errEl.style.cssText = 'color:var(--red);font-size:11px;margin-top:10px';
+    errEl.textContent = 'error: ' + e.message;
+    $('#kind-cards').appendChild(errEl);
   }
 }
 
 function showOverview() {
   $('#panel-sessions').style.display = 'none';
+  $('#panel-kind').style.display = 'none';
   $('#panel-overview').style.display = '';
 }
 
+function showKindPanel() {
+  $('#panel-sessions').style.display = 'none';
+  $('#panel-kind').style.display = 'block';
+}
+
 $('#back-link').addEventListener('click', showOverview);
-$('#f-session-search') && $('#f-session-search').addEventListener('input', () => renderSessions(currentSessions));
+$('#back-link-kind').addEventListener('click', showOverview);
+$('#back-link-to-kind').addEventListener('click', showKindPanel);
+$('#f-session-search') && $('#f-session-search').addEventListener('input', () => renderSessions(currentKindSessions));
+
+let activePreset = '7d';
+
+function applyPreset(p) {
+  activePreset = p;
+  document.querySelectorAll('.preset-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.preset === p)
+  );
+  const now = new Date();
+  const toDate = now.toISOString().slice(0, 10);
+  const msPerDay = 86400000;
+  const offsets = { '24h': 1, '7d': 7, '30d': 30 };
+  if (p === 'all') {
+    $('#f-from').value = '';
+    $('#f-to').value = '';
+  } else {
+    $('#f-from').value = new Date(now - offsets[p] * msPerDay).toISOString().slice(0, 10);
+    $('#f-to').value = toDate;
+  }
+  load();
+}
+
+function validateDateRange() {
+  const from = $('#f-from').value;
+  const to = $('#f-to').value;
+  if (from && to && from > to) {
+    $('#f-from').classList.add('date-err');
+    $('#f-to').classList.add('date-err');
+    return false;
+  }
+  $('#f-from').classList.remove('date-err');
+  $('#f-to').classList.remove('date-err');
+  return true;
+}
 
 async function load() {
   const project = $('#f-project').value.trim();
-  const since = $('#f-since').value;
+  const from = $('#f-from').value;
+  const to = $('#f-to').value;
   const kind = $('#f-kind') ? $('#f-kind').value : 'user';
-  const url = '/api/summary?since=' + encodeURIComponent(since)
-            + '&kind=' + encodeURIComponent(kind)
-            + (project ? '&project=' + encodeURIComponent(project) : '');
+  let url = '/api/summary?kind=' + encodeURIComponent(kind)
+          + (project ? '&project=' + encodeURIComponent(project) : '');
+  if (activePreset === 'all') {
+    url += '&since=all';
+  } else {
+    if (from) url += '&since=' + encodeURIComponent(from);
+    if (to)   url += '&until=' + encodeURIComponent(to);
+  }
   try {
     const resp = await fetch(url);
     const d = await resp.json();
     renderHero(d.totals);
-    renderSparkline(d.sparkline, since);
+    const sinceLabel = activePreset !== 'all' && from ? `${from} → ${to || 'now'}` : 'all-time';
+    renderSparkline(d.sparkline, sinceLabel);
     renderStageTable(d.by_stage);
     renderProjectTable(d.by_project);
     renderModelTable(d.by_model);
@@ -661,9 +826,25 @@ enableSort('t-model', {
 
 $('#refresh').addEventListener('click', load);
 $('#f-project').addEventListener('change', load);
-$('#f-since').addEventListener('change', load);
+document.querySelectorAll('.preset-btn').forEach(b =>
+  b.addEventListener('click', () => applyPreset(b.dataset.preset))
+);
+['blur', 'keydown'].forEach(evt => {
+  $('#f-from').addEventListener(evt, e => {
+    if (evt === 'keydown' && e.key !== 'Enter') return;
+    activePreset = null;
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    if (validateDateRange()) load();
+  });
+  $('#f-to').addEventListener(evt, e => {
+    if (evt === 'keydown' && e.key !== 'Enter') return;
+    activePreset = null;
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    if (validateDateRange()) load();
+  });
+});
 $('#f-kind') && $('#f-kind').addEventListener('change', load);
-load();
+applyPreset('7d');
 setInterval(load, 30000);
 </script>
 </body>

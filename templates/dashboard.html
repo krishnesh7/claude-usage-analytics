@@ -160,6 +160,12 @@
         <thead><tr><th>agent_type</th><th>sess</th><th>turns</th><th>tokens</th><th>avg/sess</th></tr></thead>
         <tbody></tbody>
       </table>
+
+      <h2 id="h-skills">top skills</h2>
+      <table id="t-skills" style="display:none">
+        <thead><tr><th>skill</th><th>invocations</th><th>sessions</th></tr></thead>
+        <tbody></tbody>
+      </table>
     </div>
 
     <!-- Kind selector panel (middle layer) -->
@@ -832,7 +838,17 @@ function validateDateRange() {
   return true;
 }
 
-function renderSkillsTable(rows) {} // stub — replaced in Task 7
+function renderSkillsTable(rows) {
+  const tbody = $('#t-skills tbody');
+  clearKids(tbody);
+  const show = rows && rows.length > 0;
+  $('#t-skills').style.display = show ? '' : 'none';
+  $('#h-skills').style.display = show ? '' : 'none';
+  if (!show) return;
+  for (const r of rows) {
+    tbody.appendChild(mkRow([r.skill_name, r.invocations, r.sessions]));
+  }
+}
 
 function computePriorRange(from, to) {
   const f = new Date(from + 'T00:00:00Z');

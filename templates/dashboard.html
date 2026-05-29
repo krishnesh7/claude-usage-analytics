@@ -176,6 +176,13 @@
       </div>
       <h2>session breakdown</h2>
       <div id="kind-cards" class="kind-cards"></div>
+      <div id="attr-section" style="display:none;margin-top:20px">
+        <h3 style="margin-bottom:6px;font-size:13px;color:var(--dim)">▸ skill attribution</h3>
+        <table id="t-attr">
+          <thead><tr><th>plugin</th><th>skill</th><th>turns</th><th>sessions</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Sessions drill-down panel -->
@@ -752,6 +759,17 @@ function renderSessions(sessions) {
   }
 }
 
+function renderAttributionPanel(rows) {
+  const section = $('#attr-section');
+  if (!rows || rows.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  const tbody = $('#t-attr tbody');
+  clearKids(tbody);
+  for (const r of rows) {
+    tbody.appendChild(mkRow([r.plugin, r.skill, r.turns, r.sessions]));
+  }
+}
+
 async function drillIntoProject(label, projectKey) {
   const from = $('#f-from').value;
   const to = $('#f-to').value;
@@ -774,12 +792,14 @@ async function drillIntoProject(label, projectKey) {
       if (from) sesUrl += '&since=' + encodeURIComponent(from);
       if (to)   sesUrl += '&until=' + encodeURIComponent(to);
     }
-    const url = sesUrl;
-    const resp = await fetch(url);
-    const d = await resp.json();
+    const attrUrl = '/api/attribution?project=' + encodeURIComponent(projectKey);
+    const [sesResp, attrResp] = await Promise.all([fetch(sesUrl), fetch(attrUrl)]);
+    const [d, attrD] = await Promise.all([sesResp.json(), attrResp.json()]);
     currentSessions = d.sessions || [];
     renderKindPanel(label, currentSessions);
+    renderAttributionPanel(attrD.attribution || []);
   } catch(e) {
+    renderAttributionPanel([]);
     clearKids($('#kind-cards'));
     const errEl = document.createElement('div');
     errEl.style.cssText = 'color:var(--red);font-size:11px;margin-top:10px';
@@ -789,6 +809,7 @@ async function drillIntoProject(label, projectKey) {
 }
 
 function showOverview() {
+  renderAttributionPanel([]);
   $('#panel-sessions').style.display = 'none';
   $('#panel-kind').style.display = 'none';
   $('#panel-overview').style.display = '';

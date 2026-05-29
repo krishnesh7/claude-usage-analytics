@@ -1,7 +1,7 @@
 import sqlite3 as _sqlite3
 from datetime import datetime, timezone
 import pytest
-from claude_usage.db import parse_until, totals_by_project, daily_timeline_by_kind, top_skills
+from claude_usage.db import parse_until, totals_by_project, daily_timeline_by_kind, top_skills, sessions_for_project
 
 
 def _insert(db_path, session_id, project_name, ts, tokens=100):
@@ -103,3 +103,19 @@ def test_top_skills_until_excludes_later(db):
     names = [r["skill_name"] for r in rows]
     assert "frontend-design" in names
     assert "feature-dev" not in names
+
+
+def test_sessions_for_project_until_excludes_later(db):
+    conn = _sqlite3.connect(str(db))
+    conn.execute(
+        "INSERT INTO sessions(session_id, project_name, started_at) VALUES ('sfp1','myproj','2026-05-20T10:00:00')"
+    )
+    conn.execute(
+        "INSERT INTO sessions(session_id, project_name, started_at) VALUES ('sfp2','myproj','2026-05-25T10:00:00')"
+    )
+    conn.commit()
+    conn.close()
+    until_dt = parse_until("2026-05-21")
+    rows = sessions_for_project("myproj", until=until_dt)
+    assert len(rows) == 1
+    assert rows[0]["session_id"] == "sfp1"

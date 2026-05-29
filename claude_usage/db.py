@@ -169,7 +169,7 @@ def totals_by_project(since: datetime | None = None, kind: str | None = None, un
         return [dict(r) for r in c.execute(sql, params)]
 
 
-def sessions_for_project(project: str, since: datetime | None = None, limit: int = 200) -> list[dict]:
+def sessions_for_project(project: str, since: datetime | None = None, limit: int = 200, until: datetime | None = None) -> list[dict]:
     """Return individual sessions for a named project, newest first."""
     sql = """
         SELECT
@@ -199,6 +199,9 @@ def sessions_for_project(project: str, since: datetime | None = None, limit: int
     if since:
         sql += " AND s.started_at >= ?"
         params.append(since.isoformat())
+    if until:
+        sql += " AND s.started_at <= ?"
+        params.append(until.isoformat())
     sql += " GROUP BY s.session_id ORDER BY s.started_at DESC LIMIT ?"
     params.append(limit)
     with connect() as c:

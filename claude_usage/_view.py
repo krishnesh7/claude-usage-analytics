@@ -116,13 +116,14 @@ def _cache_hit_rate(row: dict) -> float | None:
     return (cr / total) if total else None
 
 
-def build(project: str | None, since: str, kind: str | None = None) -> dict:
+def build(project: str | None, since: str, kind: str | None = None, until: str | None = None) -> dict:
     since_dt = dbmod.parse_since(since)
+    until_dt = dbmod.parse_until(until)
     prices = pricing_mod.load_prices()
 
-    by_stage = dbmod.totals_by_stage(project=project, since=since_dt, kind=kind)
+    by_stage = dbmod.totals_by_stage(project=project, since=since_dt, kind=kind, until=until_dt)
     for r in by_stage:
-        per_model = dbmod.turns_by_model_for_stage(r["stage"], project=project, since=since_dt)
+        per_model = dbmod.turns_by_model_for_stage(r["stage"], project=project, since=since_dt, until=until_dt)
         r["cost"] = pricing_mod.cost_dict(pricing_mod.total_cost(per_model, prices))
         for k in ("input_tokens", "cache_creation_tokens", "cache_read_tokens", "output_tokens"):
             r[k + "_h"] = _fmt(r[k])
@@ -137,10 +138,10 @@ def build(project: str | None, since: str, kind: str | None = None) -> dict:
 
     by_project = []
     if not project:
-        by_project = dbmod.totals_by_project(since=since_dt, kind=kind)
+        by_project = dbmod.totals_by_project(since=since_dt, kind=kind, until=until_dt)
         for r in by_project[:30]:
             lookup_key = r.get("project_name") or r.get("project_path", "")
-            per_model = dbmod.turns_by_model(project=lookup_key, since=since_dt)
+            per_model = dbmod.turns_by_model(project=lookup_key, since=since_dt, until=until_dt)
             r["cost"] = pricing_mod.cost_dict(pricing_mod.total_cost(per_model, prices))
             for k in ("input_tokens", "cache_creation_tokens", "cache_read_tokens", "output_tokens"):
                 r[k + "_h"] = _fmt(r[k])
@@ -151,7 +152,7 @@ def build(project: str | None, since: str, kind: str | None = None) -> dict:
             r["label"] = _project_label(r)
         by_project = by_project[:30]
 
-    by_agent_type = dbmod.totals_by_agent_type(project=project, since=since_dt, kind=kind)
+    by_agent_type = dbmod.totals_by_agent_type(project=project, since=since_dt, kind=kind, until=until_dt)
     for r in by_agent_type:
         r["total_tokens"] = _total_tokens(r)
         r["total_tokens_h"] = _fmt(r["total_tokens"])
@@ -159,7 +160,7 @@ def build(project: str | None, since: str, kind: str | None = None) -> dict:
         r["cache_hit_rate"] = _cache_hit_rate(r)
 
     # by-model rollup — total tokens and cost per Claude model used in window
-    by_model_rows = dbmod.turns_by_model(project=project, since=since_dt)
+    by_model_rows = dbmod.turns_by_model(project=project, since=since_dt, until=until_dt)
     by_model = {}
     for t in by_model_rows:
         m = t.get("model") or "unknown"
@@ -184,7 +185,7 @@ def build(project: str | None, since: str, kind: str | None = None) -> dict:
     by_model_list.sort(key=lambda x: x["total_tokens"], reverse=True)
 
     # stacked trend (user vs subagent tokens per day), respects the since filter
-    timeline_rows = dbmod.daily_timeline_by_kind(project=project, since=since_dt)
+    timeline_rows = dbmod.daily_timeline_by_kind(project=project, since=since_dt, until=until_dt)
     sparkline = [{
         "day": r["day"],
         "user": r["user_tokens"],
@@ -192,7 +193,7 @@ def build(project: str | None, since: str, kind: str | None = None) -> dict:
         "total": r["user_tokens"] + r["subagent_tokens"],
     } for r in timeline_rows if r["day"]]
 
-    top_skills = dbmod.top_skills(project=project, since=since_dt, limit=15)
+    top_skills = dbmod.top_skills(project=project, since=since_dt, limit=15, until=until_dt)
 
     # Grand totals + cache hit-rate
     total_input = sum(r["input_tokens"] for r in by_stage)
@@ -204,13 +205,13 @@ def build(project: str | None, since: str, kind: str | None = None) -> dict:
     cache_total = total_cc + total_cr + total_input
     cache_hit = (total_cr / cache_total) if cache_total else None
 
-    per_model = dbmod.turns_by_model(project=project, since=since_dt)
+    per_model = dbmod.turns_by_model(project=project, since=since_dt, until=until_dt)
     grand_cost_obj = pricing_mod.cost_dict(pricing_mod.total_cost(per_model, prices))
 
     takes = _build_takes(by_stage, by_project, grand_total, grand_cost_obj["total_usd"])
 
     return {
-        "filters": {"project": project, "since": since, "kind": kind or "all"},
+        "filters": {"project": project, "since": since, "kind": kind or "all", "until": until},
         "by_stage": by_stage,
         "by_project": by_project,
         "by_agent_type": by_agent_type,

@@ -78,6 +78,7 @@ def _where_clauses(
     since: datetime | None,
     stage: str | None,
     kind: str | None = None,
+    until: datetime | None = None,
 ) -> tuple[str, list]:
     """Build a parameterized WHERE clause. Project filter substring-matches against
     both project_path (decoded) and project_dir (encoded on-disk dir name), so
@@ -94,6 +95,10 @@ def _where_clauses(
     if since:
         where.append("(t.ts >= ? OR (t.ts IS NULL AND s.started_at >= ?))")
         iso = since.isoformat()
+        params.extend([iso, iso])
+    if until:
+        where.append("(t.ts <= ? OR (t.ts IS NULL AND s.started_at <= ?))")
+        iso = until.isoformat()
         params.extend([iso, iso])
     if stage:
         where.append("ss.stage = ?")
@@ -113,6 +118,7 @@ def totals_by_stage(
     project: str | None = None,
     since: datetime | None = None,
     kind: str | None = None,
+    until: datetime | None = None,
 ) -> list[dict]:
     """Aggregate token usage grouped by SDLC stage (across all sessions matching filters).
 
@@ -131,13 +137,13 @@ def totals_by_stage(
         LEFT JOIN session_stage ss ON ss.session_id = s.session_id
         LEFT JOIN turns t ON t.session_id = s.session_id
     """
-    clause, params = _where_clauses(project, since, None, kind=kind)
+    clause, params = _where_clauses(project, since, None, kind=kind, until=until)
     sql += clause + " GROUP BY COALESCE(ss.stage, 'unclassified') ORDER BY input_tokens + cache_creation_tokens + cache_read_tokens + output_tokens DESC"
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]
 
 
-def totals_by_project(since: datetime | None = None, kind: str | None = None) -> list[dict]:
+def totals_by_project(since: datetime | None = None, kind: str | None = None, until: datetime | None = None) -> list[dict]:
     """Group by registered project_name when available, fall back to project_path."""
     sql = """
         SELECT
@@ -153,7 +159,7 @@ def totals_by_project(since: datetime | None = None, kind: str | None = None) ->
         FROM sessions s
         LEFT JOIN turns t ON t.session_id = s.session_id
     """
-    clause, params = _where_clauses(None, since, None, kind=kind)
+    clause, params = _where_clauses(None, since, None, kind=kind, until=until)
     sql += (
         clause
         + " GROUP BY COALESCE(s.project_name, s.project_path)"
@@ -250,6 +256,7 @@ def totals_by_agent_type(
     project: str | None = None,
     since: datetime | None = None,
     kind: str | None = None,
+    until: datetime | None = None,
 ) -> list[dict]:
     sql = """
         SELECT
@@ -263,7 +270,7 @@ def totals_by_agent_type(
         FROM sessions s
         LEFT JOIN turns t ON t.session_id = s.session_id
     """
-    clause, params = _where_clauses(project, since, None, kind=kind)
+    clause, params = _where_clauses(project, since, None, kind=kind, until=until)
     sql += clause + " GROUP BY COALESCE(s.agent_type, '(main)') ORDER BY input_tokens + cache_creation_tokens + cache_read_tokens + output_tokens DESC"
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]
@@ -272,6 +279,7 @@ def totals_by_agent_type(
 def turns_by_model(
     project: str | None = None,
     since: datetime | None = None,
+    until: datetime | None = None,
 ) -> list[dict]:
     """Per-model rows joined with sessions for filter compatibility. Used by pricing."""
     sql = """
@@ -285,7 +293,7 @@ def turns_by_model(
         FROM sessions s
         JOIN turns t ON t.session_id = s.session_id
     """
-    clause, params = _where_clauses(project, since, None)
+    clause, params = _where_clauses(project, since, None, until=until)
     sql += clause + " GROUP BY COALESCE(t.model, 'unknown')"
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]
@@ -295,6 +303,7 @@ def turns_by_model_for_stage(
     stage: str,
     project: str | None = None,
     since: datetime | None = None,
+    until: datetime | None = None,
 ) -> list[dict]:
     sql = """
         SELECT
@@ -308,7 +317,7 @@ def turns_by_model_for_stage(
         JOIN turns t ON t.session_id = s.session_id
         JOIN session_stage ss ON ss.session_id = s.session_id
     """
-    clause, params = _where_clauses(project, since, stage)
+    clause, params = _where_clauses(project, since, stage, until=until)
     sql += clause + " GROUP BY COALESCE(t.model, 'unknown')"
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]
@@ -363,6 +372,7 @@ def tag_session_project(session_id: str, project_name: str) -> None:
 def daily_timeline(
     project: str | None = None,
     days: int = 30,
+    until: datetime | None = None,
 ) -> list[dict]:
     """Per-day token + cost-input rollup. Returns one row per date in the range,
     including zero days, sorted oldest first."""
@@ -383,9 +393,11 @@ def daily_timeline(
         FROM sessions s
         LEFT JOIN turns t ON t.session_id = s.session_id
     """
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += f" AND date(COALESCE(t.ts, s.started_at)) >= date('now', '-{int(days)} days')" if where else f" WHERE date(COALESCE(t.ts, s.started_at)) >= date('now', '-{int(days)} days')"
+    where.append(f"date(COALESCE(t.ts, s.started_at)) >= date('now', '-{int(days)} days')")
+    if until:
+        where.append("date(COALESCE(t.ts, s.started_at)) <= date(?)")
+        params.append(until.date().isoformat())
+    sql += (" WHERE " + " AND ".join(where)) if where else ""
     sql += " GROUP BY date(COALESCE(t.ts, s.started_at)) ORDER BY day ASC"
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]
@@ -394,6 +406,7 @@ def daily_timeline(
 def daily_timeline_by_kind(
     project: str | None = None,
     since: "datetime | None" = None,
+    until: datetime | None = None,
 ) -> list[dict]:
     """Per-day tokens split into user vs subagent buckets, for a stacked trend chart.
 
@@ -409,6 +422,9 @@ def daily_timeline_by_kind(
     if since is not None:
         where.append("COALESCE(t.ts, s.started_at) >= ?")
         params.append(since.isoformat())
+    if until is not None:
+        where.append("COALESCE(t.ts, s.started_at) <= ?")
+        params.append(until.isoformat())
     tok = "(t.input_tokens + t.cache_creation_tokens + t.cache_read_tokens + t.output_tokens)"
     is_sub = "(s.parent_session_id IS NOT NULL OR s.session_id LIKE '%::agent-%')"
     is_user = ("(s.parent_session_id IS NULL AND s.session_id NOT LIKE '%::agent-%'"
@@ -569,6 +585,7 @@ def top_skills(
     project: str | None = None,
     since: datetime | None = None,
     limit: int = 20,
+    until: datetime | None = None,
 ) -> list[dict]:
     where: list[str] = []
     params: list = []
@@ -579,6 +596,9 @@ def top_skills(
     if since:
         where.append("si.ts >= ?")
         params.append(since.isoformat())
+    if until:
+        where.append("si.ts <= ?")
+        params.append(until.isoformat())
     sql = """
         SELECT si.skill_name, COUNT(*) AS invocations,
                COUNT(DISTINCT si.session_id) AS sessions

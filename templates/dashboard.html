@@ -279,7 +279,7 @@ function mkRow(cells, rowCls) {
 }
 
 function mkDelta(curr, prior, higherIsBetter, fmtFn) {
-  if (prior == null || prior === 0) return null;
+  if (prior == null) return null;
   const delta = curr - prior;
   const sign = delta >= 0 ? '+' : '';
   const arrow = delta >= 0 ? ' ↑' : ' ↓';

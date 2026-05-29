@@ -710,7 +710,9 @@ async function drillIntoProject(label, projectKey) {
 
   try {
     let sesUrl = '/api/sessions?project=' + encodeURIComponent(projectKey);
-    if (activePreset !== 'all') {
+    if (activePreset === 'all') {
+      sesUrl += '&since=all';
+    } else {
       if (from) sesUrl += '&since=' + encodeURIComponent(from);
       if (to)   sesUrl += '&until=' + encodeURIComponent(to);
     }

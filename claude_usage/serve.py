@@ -93,20 +93,23 @@ def make_app() -> FastAPI:
     def api_summary(
         project: str | None = Query(default=None),
         since: str = Query(default="7d"),
+        until: str | None = Query(default=None),
         kind: str | None = Query(default="user"),
     ) -> JSONResponse:
         kind_arg = None if kind in (None, "", "all") else kind
-        view = _view.build(project=project, since=since, kind=kind_arg)
+        view = _view.build(project=project, since=since, kind=kind_arg, until=until)
         return JSONResponse(view)
 
     @app.get("/api/sessions")
     def api_sessions(
         project: str = Query(...),
         since: str = Query(default="all"),
+        until: str | None = Query(default=None),
     ) -> JSONResponse:
         since_dt = dbmod.parse_since(since)
+        until_dt = dbmod.parse_until(until)
         prices = pricing_mod.load_prices()
-        rows = dbmod.sessions_for_project(project, since=since_dt)
+        rows = dbmod.sessions_for_project(project, since=since_dt, until=until_dt)
         # Impute cost per session
         for r in rows:
             per_model = dbmod.turns_by_model(
@@ -133,6 +136,10 @@ def make_app() -> FastAPI:
                 subagent_description=r.get("subagent_description"),
             )
         return JSONResponse({"project": project, "sessions": rows})
+
+    @app.get("/api/attribution")
+    def api_attribution(project: str = Query(...)) -> JSONResponse:
+        return JSONResponse({"attribution": dbmod.attribution_for_project(project)})
 
     @app.get("/api/projects-for")
     def api_projects_for(

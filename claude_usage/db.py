@@ -38,6 +38,22 @@ def parse_since(since: str | None) -> datetime | None:
         return None
 
 
+def parse_until(s: str | None) -> datetime | None:
+    """Accepts an ISO date ('YYYY-MM-DD') or datetime string, or None/'all' (unbounded).
+    Date-only strings are treated as end-of-day (23:59:59 UTC) so the range is inclusive."""
+    if not s or s in ("all", ""):
+        return None
+    try:
+        dt = datetime.fromisoformat(s.strip().replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if len(s.strip()) == 10:
+            dt = dt.replace(hour=23, minute=59, second=59)
+        return dt
+    except ValueError:
+        return None
+
+
 @dataclass
 class TurnTotals:
     sessions: int

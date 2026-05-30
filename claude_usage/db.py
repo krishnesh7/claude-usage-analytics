@@ -208,6 +208,40 @@ def sessions_for_project(project: str, since: datetime | None = None, limit: int
         return [dict(r) for r in c.execute(sql, params)]
 
 
+def sessions_for_system_ops(since: datetime | None = None, until: datetime | None = None, limit: int = 200) -> list[dict]:
+    """Return sessions from system temp directories (plugin/automation sessions)."""
+    sys_prefixes = ("/private/tmp", "/tmp", "/private/var/folders/", "/var/folders/")
+    conditions = " OR ".join("s.project_path LIKE ?" for _ in sys_prefixes)
+    sql = f"""
+        SELECT
+          s.session_id, s.project_name, s.project_path,
+          s.started_at, s.ended_at, s.is_tracker_overhead,
+          s.ai_title, s.first_user_message, s.agent_type,
+          s.parent_session_id, s.subagent_description,
+          COALESCE(ss.stage, 'adhoc') AS stage,
+          COUNT(t.id) AS turns,
+          COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
+          COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
+          COALESCE(SUM(t.cache_read_tokens), 0) AS cache_read_tokens,
+          COALESCE(SUM(t.output_tokens), 0) AS output_tokens
+        FROM sessions s
+        LEFT JOIN turns t ON t.session_id = s.session_id
+        LEFT JOIN session_stage ss ON ss.session_id = s.session_id
+        WHERE ({conditions})
+    """
+    params: list = [f"{p}%" for p in sys_prefixes]
+    if since:
+        sql += " AND s.started_at >= ?"
+        params.append(since.isoformat())
+    if until:
+        sql += " AND s.started_at <= ?"
+        params.append(until.isoformat())
+    sql += " GROUP BY s.session_id ORDER BY s.started_at DESC LIMIT ?"
+    params.append(limit)
+    with connect() as c:
+        return [dict(r) for r in c.execute(sql, params)]
+
+
 def projects_by_dim(
     dim: str,
     key: str,

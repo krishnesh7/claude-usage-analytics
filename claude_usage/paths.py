@@ -39,14 +39,21 @@ def _resolve_data_dir() -> Path:
 
 
 def _resolve_parser() -> Path:
-    """The vendored Node parser. Plugin install > repo checkout > legacy."""
+    """The vendored Node parser. Plugin install > legacy install > repo checkout.
+
+    The legacy install at ~/.claude/usage/parser/ has node_modules alongside it
+    so better-sqlite3 resolves correctly. Prefer it over the bare repo copy when
+    running in dev mode so the auto-parse loop doesn't fail with
+    ERR_MODULE_NOT_FOUND.
+    """
     proot = _plugin_root()
     if proot and (proot / "parser" / "parse.mjs").exists():
         return proot / "parser" / "parse.mjs"
-    repo_parser = _REPO_ROOT / "parser" / "parse.mjs"
-    if repo_parser.exists():
-        return repo_parser
-    return HOME / ".claude" / "usage" / "parser" / "parse.mjs"
+    # Legacy install has node_modules — always prefer it when present
+    legacy = HOME / ".claude" / "usage" / "parser" / "parse.mjs"
+    if legacy.exists():
+        return legacy
+    return _REPO_ROOT / "parser" / "parse.mjs"
 
 
 USAGE_DIR = _resolve_data_dir()

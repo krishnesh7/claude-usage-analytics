@@ -16,6 +16,9 @@ claude-usage-report-*.html
 report-*.html
 *_report_preview.html
 
+# Personal usage tracking (local cost accounting — not for sharing)
+docs/usage/CLAUDE_USAGE.md
+
 # Local databases / caches (live outside repo, but guard anyway)
 *.db
 *.db-wal

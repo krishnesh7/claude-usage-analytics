@@ -87,7 +87,10 @@ def make_app() -> FastAPI:
 
     @app.get("/")
     def index() -> FileResponse:
-        return FileResponse(_index_path(), media_type="text/html")
+        return FileResponse(
+            _index_path(), media_type="text/html",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
 
     @app.get("/api/summary")
     def api_summary(
@@ -109,7 +112,10 @@ def make_app() -> FastAPI:
         since_dt = dbmod.parse_since(since)
         until_dt = dbmod.parse_until(until)
         prices = pricing_mod.load_prices()
-        rows = dbmod.sessions_for_project(project, since=since_dt, until=until_dt)
+        if project == "__system_ops__":
+            rows = dbmod.sessions_for_system_ops(since=since_dt, until=until_dt)
+        else:
+            rows = dbmod.sessions_for_project(project, since=since_dt, until=until_dt)
         # Impute cost per session
         for r in rows:
             per_model = dbmod.turns_by_model(
@@ -128,8 +134,10 @@ def make_app() -> FastAPI:
                 + r["cache_read_tokens"] + r["output_tokens"]
             )
             # Redact before label-building so even the dashboard tooltip is safe.
+            # Try sys-ops pattern first (before redacting destroys the signal)
+            sys_label = _labels.sys_ops_label(r.get("first_user_message"))
             _redact.redact_row(r, ("first_user_message", "ai_title", "subagent_description"))
-            r["display_label"] = _labels.clean_label(
+            r["display_label"] = sys_label or _labels.clean_label(
                 r.get("ai_title"), r.get("first_user_message"),
                 agent_type=r.get("agent_type"),
                 parent_session_id=r.get("parent_session_id"),

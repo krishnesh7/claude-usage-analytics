@@ -56,6 +56,8 @@
   tr.clickable td:first-child { color: var(--blue); }
   .stage-overhead { color: var(--yellow); }
   .stage-overhead td:first-child::before { content: '⟳ '; }
+  tr.sys-ops td { color: var(--dim); }
+  tr.sys-ops td:first-child { color: var(--yellow) !important; font-style: italic; }
   .footer { color: rgba(255,255,255,0.25); font-size: 11px; margin-top: 22px; text-align: center; }
   .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: middle; }
   .live-dot.stale { background: var(--red); }
@@ -391,15 +393,20 @@ function renderProjectTable(rows, priorRows) {
   }
   rows = applySort('t-project', rows);
   markSortHeader('t-project');
+  const shortenPath = (p) => {
+    if (!p || !p.startsWith('/')) return p;
+    const parts = p.split('/').filter(Boolean);
+    if (parts.length <= 2) return p;
+    return '…/' + parts.slice(-2).join('/');
+  };
   for (const r of rows.slice(0, 20)) {
-    const name = r.display_name || r.project_name || r.project_path || '(unknown)';
-    const shortenPath = (p) => {
-      if (!p || !p.startsWith('/')) return p;
-      const parts = p.split('/').filter(Boolean);
-      if (parts.length <= 2) return p;
-      return '…/' + parts.slice(-2).join('/');
-    };
-    const label = r.project_name ? name : shortenPath(name) + ' (path)';
+    const isSysOps = !!r.is_system_ops;
+    const name = r.label || r.display_name || r.project_name || r.project_path || '(unknown)';
+    const label = isSysOps ? '⚙ ' + name
+      : (r.project_name ? name : shortenPath(name) + ' (path)');
+    const tooltip = isSysOps
+      ? 'Plugin & automation sessions (memory consolidation etc.) — included in grand total'
+      : (r.project_path || '');
     const drillKey = r.project_name || name;
     const priorCost = priorByKey[drillKey] ?? null;
     let deltaCell;
@@ -411,16 +418,18 @@ function renderProjectTable(rows, priorRows) {
       const cls = delta > 0 ? 'pct red' : delta < 0 ? 'pct ok' : 'pct';
       deltaCell = { text: sign + '$' + Math.abs(delta).toFixed(2), cls };
     }
+    const rowCls = isSysOps ? 'sys-ops clickable' : 'clickable';
     const tr = mkRow([
-      { text: label, title: r.project_path || '' },
+      { text: label, title: tooltip },
       r.sessions, r.turns,
       fmt(r.total_tokens),
       '$' + (r.cost?.total_usd ?? 0).toFixed(2),
       fmtCacheHit(r.cache_hit_rate),
       { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
       deltaCell,
-    ], 'clickable');
-    tr.addEventListener('click', () => drillIntoProject(label, drillKey));
+    ], rowCls);
+    const drillTarget = isSysOps ? '__system_ops__' : drillKey;
+    tr.addEventListener('click', () => drillIntoProject(label, drillTarget));
     tbody.appendChild(tr);
   }
 }
@@ -789,8 +798,10 @@ async function drillIntoProject(label, projectKey) {
     if (activePreset === 'all') {
       sesUrl += '&since=all';
     } else {
-      if (from) sesUrl += '&since=' + encodeURIComponent(from);
-      if (to)   sesUrl += '&until=' + encodeURIComponent(to);
+      const sp = exactSince || from;
+      const up = exactUntil || to;
+      if (sp) sesUrl += '&since=' + encodeURIComponent(sp);
+      if (up) sesUrl += '&until=' + encodeURIComponent(up);
     }
     const attrUrl = '/api/attribution?project=' + encodeURIComponent(projectKey);
     const [sesResp, attrResp] = await Promise.all([fetch(sesUrl), fetch(attrUrl)]);
@@ -826,6 +837,8 @@ $('#back-link-to-kind').addEventListener('click', showKindPanel);
 $('#f-session-search') && $('#f-session-search').addEventListener('input', () => renderSessions(currentKindSessions));
 
 let activePreset = '7d';
+let exactSince = null;   // ISO string with tz offset, set by 24h preset
+let exactUntil = null;
 
 function applyPreset(p) {
   activePreset = p;
@@ -833,15 +846,37 @@ function applyPreset(p) {
     b.classList.toggle('active', b.dataset.preset === p)
   );
   const now = new Date();
-  const toDate = now.toISOString().slice(0, 10);
   const msPerDay = 86400000;
+  // Local-time date string YYYY-MM-DD (en-CA locale gives ISO format reliably)
+  const localDate = (d) => d.toLocaleDateString('en-CA');
+  // Full ISO string with local timezone offset e.g. "2026-05-29T14:32:00+05:30"
+  const localISO = (d) => {
+    const off = -d.getTimezoneOffset();
+    const sign = off >= 0 ? '+' : '-';
+    const hh = String(Math.floor(Math.abs(off) / 60)).padStart(2, '0');
+    const mm = String(Math.abs(off) % 60).padStart(2, '0');
+    const local = new Date(d - d.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 19) + sign + hh + ':' + mm;
+  };
   const offsets = { '24h': 1, '7d': 7, '30d': 30 };
+  // exactSince/Until carry timezone-aware ISO timestamps for the API call.
+  // They're separate from the date inputs because <input type="date"> only
+  // accepts YYYY-MM-DD — setting a full ISO string on it is silently ignored.
+  exactSince = null;
+  exactUntil = null;
   if (p === 'all') {
     $('#f-from').value = '';
     $('#f-to').value = '';
+  } else if (p === '24h') {
+    // Show local dates in the visible inputs; store exact timestamps for the query
+    exactSince = localISO(new Date(now - msPerDay));
+    exactUntil = localISO(now);
+    $('#f-from').value = localDate(new Date(now - msPerDay));
+    $('#f-to').value = localDate(now);
   } else {
-    $('#f-from').value = new Date(now - offsets[p] * msPerDay).toISOString().slice(0, 10);
-    $('#f-to').value = toDate;
+    // 7d/30d: day-level granularity is fine, use local date strings directly
+    $('#f-from').value = localDate(new Date(now - offsets[p] * msPerDay));
+    $('#f-to').value = localDate(now);
   }
   load();
 }
@@ -872,8 +907,9 @@ function renderSkillsTable(rows) {
 }
 
 function computePriorRange(from, to) {
-  const f = new Date(from + 'T00:00:00Z');
-  const t = new Date(to + 'T23:59:59Z');
+  // Accept both plain dates ("2026-05-29") and full ISO strings with tz offset
+  const f = new Date(from.length === 10 ? from + 'T00:00:00Z' : from);
+  const t = new Date(to.length   === 10 ? to   + 'T23:59:59Z' : to);
   const dMs = t - f;
   const priorFrom = new Date(f - dMs).toISOString().slice(0, 10);
   const priorTo   = new Date(f.getTime() - 1).toISOString().slice(0, 10);
@@ -887,17 +923,21 @@ async function load() {
   const kind = $('#f-kind') ? $('#f-kind').value : 'user';
   let url = '/api/summary?kind=' + encodeURIComponent(kind)
           + (project ? '&project=' + encodeURIComponent(project) : '');
+  // Use exact tz-aware timestamps when available (set by 24h preset),
+  // otherwise fall back to the date input values
+  const sinceParam = exactSince || from;
+  const untilParam = exactUntil || to;
   if (activePreset === 'all') {
     url += '&since=all';
   } else {
-    if (from) url += '&since=' + encodeURIComponent(from);
-    if (to)   url += '&until=' + encodeURIComponent(to);
+    if (sinceParam) url += '&since=' + encodeURIComponent(sinceParam);
+    if (untilParam) url += '&until=' + encodeURIComponent(untilParam);
   }
   try {
     const fetchCurrent = fetch(url);
     let fetchPrior = null;
-    if (activePreset !== 'all' && from && to) {
-      const { priorFrom, priorTo } = computePriorRange(from, to);
+    if (activePreset !== 'all' && sinceParam && untilParam) {
+      const { priorFrom, priorTo } = computePriorRange(sinceParam, untilParam);
       let priorUrl = '/api/summary?kind=' + encodeURIComponent(kind)
                    + '&since=' + encodeURIComponent(priorFrom)
                    + '&until=' + encodeURIComponent(priorTo)

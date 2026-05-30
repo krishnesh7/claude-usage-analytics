@@ -15,6 +15,53 @@ import re
 
 MAX_LEN = 60
 
+# "You are [a/an/the] <role>." — captures up to the first sentence boundary
+_YOU_ARE_RE = re.compile(
+    r"^You are (?:a |an |the )?(.+?)(?:\.|,|\n|$)", re.IGNORECASE
+)
+# Imperative opener: "Apply maximum non-destructive compression."
+# Allows hyphenated words like "non-destructive"
+_IMPERATIVE_RE = re.compile(
+    r"^([A-Z][a-z]+(?:-[a-z]+)*(?:\s+[a-z]+(?:-[a-z]+)*){0,5})\.",
+    re.MULTILINE,
+)
+
+
+def sys_ops_label(first_user_message: str | None) -> str | None:
+    """Auto-derive a short label for automation/plugin sessions from the
+    structure of their system prompt — no hardcoded patterns needed.
+
+    Handles two common prompt styles:
+      "You are a memory consolidation agent. ..."  → "memory consolidation agent"
+      "You are summarizing a Claude Code session"  → "summarizing claude code session"
+      "Apply maximum non-destructive compression." → "apply maximum non-destructive compression"
+
+    Returns None when the message doesn't look like an automation system prompt
+    (too short, or starts with a real user sentence).
+    """
+    raw = (first_user_message or "").strip()
+    if not raw or len(raw) < 40:
+        return None
+
+    # Style 1: "You are [a/an/the] <role>."
+    m = _YOU_ARE_RE.match(raw)
+    if m:
+        role = m.group(1).strip()
+        # Drop clauses after stopwords: "agent who ...", "agent that ..."
+        role = re.split(r"\s+(?:who|that|and|with|your)\b", role, flags=re.IGNORECASE)[0]
+        # Keep first 5 words so very long role phrases don't blow the label
+        words = role.split()[:5]
+        return _truncate(" ".join(words).lower())
+
+    # Style 2: Leading imperative verb phrase (≥3 words before the first ".")
+    m = _IMPERATIVE_RE.match(raw)
+    if m:
+        phrase = m.group(1).strip()
+        if len(phrase.split()) >= 3:
+            return _truncate(phrase.lower())
+
+    return None
+
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 _LEADING_NOISE_RE = re.compile(

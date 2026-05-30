@@ -7,6 +7,7 @@ from typing import Any
 
 from . import db as dbmod
 from . import pricing as pricing_mod
+from . import projects as projects_mod
 
 
 def _fmt(n: int | float) -> str:
@@ -39,6 +40,96 @@ def _project_label(r: dict) -> str:
         if len(parts) > 2:
             return "…/" + "/".join(parts[-2:]) + " (path)"
     return path + " (path)"
+
+
+_SYSTEM_TEMP_PREFIXES = (
+    "/private/tmp",
+    "/tmp",
+    "/private/var/folders/",
+    "/var/folders/",
+)
+
+
+def _is_system_temp(path: str) -> bool:
+    return any(path.startswith(p) for p in _SYSTEM_TEMP_PREFIXES)
+
+
+def _is_ancestor_of_registered(path: str, registered_roots: list) -> bool:
+    from pathlib import Path
+    p = Path(path).resolve()
+    return any(
+        root != p and str(root).startswith(str(p) + "/")
+        for root in registered_roots
+    )
+
+
+def _collapse_project_rows(by_project: list[dict], grand_total: int) -> list[dict]:
+    """Filter ancestor-path rows and collapse system-temp rows into one
+    'system operations' synthetic entry appended at the bottom."""
+    from pathlib import Path
+    registered_roots = [
+        Path(p.root_path).resolve()
+        for p in projects_mod.load_all().values()
+        if p.root_path
+    ]
+    # Also treat every unregistered path row as a virtual root so ancestor
+    # rows are suppressed even when no project is formally registered.
+    all_path_roots = registered_roots + [
+        Path(r["project_path"]).resolve()
+        for r in by_project
+        if not r.get("project_name") and r.get("project_path", "").startswith("/")
+    ]
+
+    kept: list[dict] = []
+    ops_rows: list[dict] = []
+
+    for r in by_project:
+        if r.get("project_name"):
+            kept.append(r)
+            continue
+        raw = r.get("project_path") or ""
+        if _is_system_temp(raw):
+            ops_rows.append(r)
+        elif raw.startswith("/") and _is_ancestor_of_registered(raw, all_path_roots):
+            pass  # suppress: this path is a parent of another listed project
+        else:
+            kept.append(r)
+
+    if ops_rows:
+        # Aggregate into one synthetic row
+        def _sum(key: str) -> int:
+            return sum(r.get(key, 0) or 0 for r in ops_rows)
+
+        total_tok = sum(r.get("total_tokens", 0) or 0 for r in ops_rows)
+        total_cost = sum((r.get("cost") or {}).get("total_usd", 0) for r in ops_rows)
+        sessions = sum(r.get("sessions", 0) or 0 for r in ops_rows)
+        turns = sum(r.get("turns", 0) or 0 for r in ops_rows)
+
+        # Weighted cache-hit rate
+        cache_reads = _sum("cache_read_tokens")
+        cache_all = _sum("input_tokens") + _sum("cache_creation_tokens") + _sum("cache_read_tokens")
+        cache_hit = (cache_reads / cache_all) if cache_all else None
+
+        ops: dict = {
+            "label": "system operations",
+            "project_name": None,
+            "project_path": "; ".join(r.get("project_path", "") for r in ops_rows),
+            "is_system_ops": True,
+            "sessions": sessions,
+            "turns": turns,
+            "input_tokens": _sum("input_tokens"),
+            "cache_creation_tokens": _sum("cache_creation_tokens"),
+            "cache_read_tokens": _sum("cache_read_tokens"),
+            "output_tokens": _sum("output_tokens"),
+            "total_tokens": total_tok,
+            "total_tokens_h": _fmt(total_tok),
+            "pct_of_total": (100.0 * total_tok / grand_total) if grand_total else 0.0,
+            "cache_hit_rate": cache_hit,
+            "cost": {"total_usd": total_cost},
+        }
+        kept.append(ops)
+
+    return kept
 
 
 def _fmt_short(n: float) -> str:
@@ -150,7 +241,7 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
             r["pct_of_total"] = (100.0 * r["total_tokens"] / grand_total) if grand_total else 0.0
             r["cache_hit_rate"] = _cache_hit_rate(r)
             r["label"] = _project_label(r)
-        by_project = by_project[:30]
+        by_project = _collapse_project_rows(by_project[:30], grand_total)
 
     by_agent_type = dbmod.totals_by_agent_type(project=project, since=since_dt, kind=kind, until=until_dt)
     for r in by_agent_type:

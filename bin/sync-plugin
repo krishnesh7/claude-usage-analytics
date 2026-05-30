@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Syncs plugin content from the project into the Claude Code plugin cache.
+# Required because the cache must be a real directory (not a symlink) to pass
+# the plugin loader's boundary check (~/.claude/plugins/ must contain the path).
+# Run this after changing commands/, hooks/, or skills/, or after updating plugin.json.
+
+set -euo pipefail
+
+SRC="$(cd "$(dirname "$0")/.." && pwd)"
+DST="$HOME/.claude/plugins/cache/local-rk-plugins/claude-usage-analytics/unknown"
+
+if [[ ! -d "$DST" ]]; then
+  echo "ERROR: Plugin cache directory not found: $DST" >&2
+  echo "Re-install the plugin from the local-rk-plugins marketplace first." >&2
+  exit 1
+fi
+
+rsync -a --delete "$SRC/commands/" "$DST/commands/"
+rsync -a --delete "$SRC/hooks/"    "$DST/hooks/"
+rsync -a --delete "$SRC/skills/"   "$DST/skills/"
+cp "$SRC/.claude-plugin/plugin.json" "$DST/plugin.json"
+
+echo "Plugin cache synced → $DST"

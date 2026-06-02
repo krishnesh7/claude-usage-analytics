@@ -68,3 +68,15 @@ def test_daily_cost_by_day_respects_since_filter(db):
     rows = daily_cost_by_day(since=since)
     assert all(r["day"] >= "2026-05-05" for r in rows)
     assert len(rows) == 1
+
+
+def test_build_sparkline_has_cost_usd(db):
+    _insert_turn(db, "s1", "proj", "2026-05-01T10:00:00", "claude-3-5-sonnet-20241022", input_tokens=1000, output_tokens=500)
+    from claude_usage._view import build
+    result = build(project=None, since="all", kind=None)
+    sparkline = result["sparkline"]
+    assert len(sparkline) > 0
+    for row in sparkline:
+        assert "cost_usd" in row
+        assert isinstance(row["cost_usd"], float)
+        assert row["cost_usd"] >= 0.0

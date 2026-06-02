@@ -480,6 +480,45 @@ def daily_timeline_by_kind(
         return [dict(r) for r in c.execute(sql, params)]
 
 
+def daily_cost_by_day(
+    since: "datetime | None" = None,
+    until: "datetime | None" = None,
+    project: str | None = None,
+) -> list[dict]:
+    """Per-day, per-model token rows for cost imputation across a date range.
+
+    Returns [{day, model, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens}]
+    for each (day, model) combination. Used by _view.build() to add cost_usd to sparkline rows.
+    """
+    where: list[str] = []
+    params: list = []
+    if project:
+        where.append("(s.project_name = ? OR s.project_path LIKE ? OR s.project_dir LIKE ?)")
+        like = f"%{project}%"
+        params.extend([project, like, like])
+    if since is not None:
+        where.append("COALESCE(t.ts, s.started_at) >= ?")
+        params.append(since.isoformat())
+    if until is not None:
+        where.append("COALESCE(t.ts, s.started_at) <= ?")
+        params.append(until.isoformat())
+    sql = """
+        SELECT date(COALESCE(t.ts, s.started_at)) AS day,
+               COALESCE(t.model, 'unknown') AS model,
+               COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
+               COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
+               COALESCE(SUM(t.cache_read_tokens), 0) AS cache_read_tokens,
+               COALESCE(SUM(t.output_tokens), 0) AS output_tokens
+        FROM sessions s
+        LEFT JOIN turns t ON t.session_id = s.session_id
+    """
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " GROUP BY day, COALESCE(t.model, 'unknown') ORDER BY day ASC"
+    with connect() as c:
+        return [dict(r) for r in c.execute(sql, params)]
+
+
 def turns_by_model_for_day(
     day: str,
     project: str | None = None,

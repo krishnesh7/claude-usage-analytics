@@ -477,14 +477,12 @@ function renderStageTable(rows) {
                       + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
     const tr = mkRow([
       r.stage, r.sessions, r.turns,
-      fmt(r.input_tokens), fmt(r.cache_creation_tokens),
-      fmt(r.cache_read_tokens), fmt(r.output_tokens),
       fmt(totalTokens),
       '$' + (r.cost?.total_usd ?? 0).toFixed(2),
       fmtCacheHit(r.cache_hit_rate),
       { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
     ], rowCls);
-    tr.addEventListener('click', () => toggleBreakdown(tr, 'stage', r.stage, 11));
+    tr.addEventListener('click', () => toggleBreakdown(tr, 'stage', r.stage, 7));
     tbody.appendChild(tr);
   }
 }
@@ -538,9 +536,18 @@ function renderProjectTable(rows, priorRows) {
       fmt(r.total_tokens),
       '$' + (r.cost?.total_usd ?? 0).toFixed(2),
       fmtCacheHit(r.cache_hit_rate),
-      { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
+      '',
       deltaCell,
     ], rowCls);
+    const shareCell = tr.children[6];
+    shareCell.className = 'share-cell';
+    const pctVal = (r.pct_of_total ?? 0).toFixed(1);
+    const bar = document.createElement('div');
+    bar.className = 'share-bar';
+    bar.style.width = pctVal + '%';
+    const txt = mkEl('span', pctVal + '%', 'share-text pct');
+    shareCell.appendChild(bar);
+    shareCell.appendChild(txt);
     const drillTarget = isSysOps ? '__system_ops__' : drillKey;
     tr.addEventListener('click', () => drillIntoProject(label, drillTarget));
     tbody.appendChild(tr);

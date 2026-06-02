@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS turns (
   model TEXT,
   input_tokens INTEGER DEFAULT 0,
   cache_creation_tokens INTEGER DEFAULT 0,
+  cache_creation_1h_tokens INTEGER DEFAULT 0,
   cache_read_tokens INTEGER DEFAULT 0,
   output_tokens INTEGER DEFAULT 0,
   service_tier TEXT
@@ -152,6 +153,11 @@ CREATE TABLE IF NOT EXISTS session_attribution (
 );
 `)
 
+// Migration guard for existing DBs: add cache_creation_1h_tokens if it doesn't exist.
+try {
+  db.prepare('ALTER TABLE turns ADD COLUMN cache_creation_1h_tokens INTEGER DEFAULT 0').run()
+} catch (_) { /* column already exists in this DB */ }
+
 // Idempotent migrations: add columns if they don't exist yet.
 // SQLite ALTER TABLE has no IF NOT EXISTS for columns, so we try/catch.
 for (const col of [
@@ -188,12 +194,13 @@ const stmt = {
       subagent_description = COALESCE(excluded.subagent_description, sessions.subagent_description)
   `),
   upsertTurn: db.prepare(`
-    INSERT INTO turns (session_id, request_id, ts, model, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, service_tier)
-    VALUES (@session_id, @request_id, @ts, @model, @input_tokens, @cache_creation_tokens, @cache_read_tokens, @output_tokens, @service_tier)
+    INSERT INTO turns (session_id, request_id, ts, model, input_tokens, cache_creation_tokens, cache_creation_1h_tokens, cache_read_tokens, output_tokens, service_tier)
+    VALUES (@session_id, @request_id, @ts, @model, @input_tokens, @cache_creation_tokens, @cache_creation_1h_tokens, @cache_read_tokens, @output_tokens, @service_tier)
     ON CONFLICT(request_id) DO UPDATE SET
       output_tokens = MAX(turns.output_tokens, excluded.output_tokens),
       input_tokens = MAX(turns.input_tokens, excluded.input_tokens),
       cache_creation_tokens = MAX(turns.cache_creation_tokens, excluded.cache_creation_tokens),
+      cache_creation_1h_tokens = MAX(turns.cache_creation_1h_tokens, excluded.cache_creation_1h_tokens),
       cache_read_tokens = MAX(turns.cache_read_tokens, excluded.cache_read_tokens),
       model = COALESCE(excluded.model, turns.model),
       service_tier = COALESCE(excluded.service_tier, turns.service_tier)
@@ -545,6 +552,7 @@ async function processFile(p, stats) {
         model: model,
         input_tokens: usage.input_tokens || 0,
         cache_creation_tokens: usage.cache_creation_input_tokens || 0,
+        cache_creation_1h_tokens: usage.cache_creation_1h_input_tokens || 0,
         cache_read_tokens: usage.cache_read_input_tokens || 0,
         output_tokens: usage.output_tokens || 0,
         service_tier: usage.service_tier || null,

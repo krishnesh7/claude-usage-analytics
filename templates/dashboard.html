@@ -96,42 +96,77 @@
   table.inner-breakdown th { color: var(--dim); font-size: 10px; padding: 3px 8px; }
   table.inner-breakdown td { padding: 3px 8px; border-bottom: 1px dashed rgba(255,255,255,0.04); }
   table.inner-breakdown td:first-child { color: var(--blue); }
+
+  /* ── Persistent header ── */
+  .navbar { background: var(--tb); border-radius: 8px 8px 0 0; padding: 11px 14px; display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--outline); }
+  .filter-bar { background: var(--tb); padding: 8px 14px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--outline); }
+  .filter-bar label { color: var(--dim); font-size: 11px; }
+  .filter-bar input, .filter-bar select, .filter-bar button { background: rgba(255,255,255,0.04); border: 1px solid var(--outline); color: var(--fg); padding: 6px 10px; border-radius: 4px; font: inherit; }
+  .filter-bar button { cursor: pointer; }
+  .filter-bar button:hover { background: rgba(255,255,255,0.08); }
+  .breadcrumb-nav { margin-left: 14px; color: var(--dim); font-size: 11px; display: flex; align-items: center; gap: 4px; flex: 1; }
+  .breadcrumb-nav button { background: none; border: none; color: var(--blue); cursor: pointer; font: inherit; font-size: 11px; padding: 0; text-decoration: underline; }
+  .breadcrumb-sep { color: var(--dim); margin: 0 2px; }
+
+  /* ── KPI cards ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .kpi-card { background: rgba(255,255,255,0.03); border: 1px solid var(--outline); border-radius: 6px; padding: 14px 18px; }
+  .kpi-label { color: var(--dim); font-size: 11px; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+
+  /* ── Insight callouts (takes) ── */
+  #takes-section { margin-bottom: 16px; }
+  .take-row { display: flex; gap: 14px; align-items: baseline; border-left: 3px solid var(--dim); padding: 4px 10px; margin-bottom: 5px; font-size: 12px; line-height: 1.4; }
+  .take-fig { color: var(--clay); min-width: 56px; font-weight: 600; flex-shrink: 0; }
+
+  /* ── Charts row ── */
+  .charts-row { display: grid; grid-template-columns: 1fr 240px; gap: 14px; margin-bottom: 22px; }
+  .chart-panel { background: rgba(255,255,255,0.02); border: 1px solid var(--outline); border-radius: 4px; padding: 10px; position: relative; height: 200px; }
+
+  /* ── Inline share bar ── */
+  .share-cell { position: relative; overflow: hidden; }
+  .share-bar { position: absolute; top: 0; left: 0; height: 100%; background: rgba(100,160,255,0.10); pointer-events: none; }
+  .share-text { position: relative; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="term">
-  <div class="titlebar">
+  <div class="navbar">
     <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-    <span class="path">~ • cu serve · <span id="live"><span class="live-dot" id="live-dot"></span><span id="live-text">live</span></span></span>
+    <span id="breadcrumb" class="breadcrumb-nav"></span>
+    <span id="live" style="margin-left:auto;font-size:11px;color:var(--dim)"><span class="live-dot" id="live-dot"></span><span id="live-text">live</span></span>
+  </div>
+  <div class="filter-bar">
+    <label>project <input id="f-project" placeholder="(all)" style="width:200px"></label>
+    <span id="preset-btns">
+      <button class="preset-btn" data-preset="24h">24h</button>
+      <button class="preset-btn active" data-preset="7d">7d</button>
+      <button class="preset-btn" data-preset="30d">30d</button>
+      <button class="preset-btn" data-preset="all">all</button>
+    </span>
+    <label>from <input type="date" id="f-from" style="width:120px"></label>
+    <label>to <input type="date" id="f-to" style="width:120px"></label>
+    <label>kind
+      <select id="f-kind">
+        <option value="user" selected>user only</option>
+        <option value="subagent">subagent only</option>
+        <option value="tracker">tracker</option>
+        <option value="all">all</option>
+      </select>
+    </label>
+    <button id="refresh">↺ refresh</button>
   </div>
   <div class="term-body">
-    <div class="controls">
-      <label>project <input id="f-project" placeholder="(all)" style="width: 200px"></label>
-      <span id="preset-btns">
-        <button class="preset-btn" data-preset="24h">24h</button>
-        <button class="preset-btn active" data-preset="7d">7d</button>
-        <button class="preset-btn" data-preset="30d">30d</button>
-        <button class="preset-btn" data-preset="all">all</button>
-      </span>
-      <label>from <input type="date" id="f-from" style="width:120px"></label>
-      <label>to <input type="date" id="f-to" style="width:120px"></label>
-      <label>kind
-        <select id="f-kind">
-          <option value="user" selected>user only</option>
-          <option value="subagent">subagent only</option>
-          <option value="tracker">tracker</option>
-          <option value="all">all</option>
-        </select>
-      </label>
-      <button id="refresh">↺ refresh</button>
-    </div>
 
     <!-- Overview panel -->
     <div id="panel-overview">
-      <div id="hero" class="hero"></div>
-      <div id="hero-split" class="hero-split"></div>
-      <div id="sparkline-wrap" class="sparkline-wrap"></div>
-      <div id="spark-tip" class="spark-tip"></div>
+      <div id="kpi-cards" class="kpi-row"></div>
+      <div id="takes-section"></div>
+      <div class="charts-row">
+        <div class="chart-panel"><canvas id="chart-trend"></canvas></div>
+        <div class="chart-panel"><canvas id="chart-donut"></canvas></div>
+      </div>
 
       <h2 id="h-project">by project</h2>
       <p class="hint">Click a row to drill into individual sessions.</p>
@@ -152,7 +187,10 @@
       <h2>by SDLC stage</h2>
       <p class="hint">Click a row to see the project distribution for that stage.</p>
       <table id="t-stage">
-        <thead><tr><th>stage</th><th>sess</th><th>turns</th><th>input</th><th>cache·write</th><th>cache·read</th><th>output</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th></tr></thead>
+        <colgroup>
+          <col class="c-name"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-pct"><col class="c-pct">
+        </colgroup>
+        <thead><tr><th>stage</th><th>sess</th><th>turns</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th></tr></thead>
         <tbody></tbody>
       </table>
 
@@ -172,10 +210,7 @@
 
     <!-- Kind selector panel (middle layer) -->
     <div id="panel-kind">
-      <div class="breadcrumb">
-        <button id="back-link-kind">← all projects</button>
-        <span> / </span><span id="drill-project-label-kind"></span>
-      </div>
+      <span id="drill-project-label-kind" style="display:none"></span>
       <h2>session breakdown</h2>
       <div id="kind-cards" class="kind-cards"></div>
       <div id="attr-section" style="display:none;margin-top:20px">
@@ -189,12 +224,7 @@
 
     <!-- Sessions drill-down panel -->
     <div id="panel-sessions">
-      <div class="breadcrumb">
-        <button id="back-link">← all projects</button>
-        <span> / </span>
-        <button id="back-link-to-kind" style="background:none;border:none;color:var(--blue);cursor:pointer;font:inherit;padding:0;text-decoration:underline;"></button>
-        <span id="drill-kind-crumb"></span>
-      </div>
+
       <h2>sessions</h2>
       <input id="f-session-search" class="session-search" placeholder="filter sessions by label…">
 
@@ -229,6 +259,89 @@ function mkEl(tag, text, cls) {
   return e;
 }
 function clearKids(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+function renderBreadcrumb(segments) {
+  const nav = $('#breadcrumb');
+  clearKids(nav);
+  segments.forEach((seg, i) => {
+    if (i > 0) {
+      nav.appendChild(mkEl('span', ' / ', 'breadcrumb-sep'));
+    }
+    if (seg.onClick) {
+      const btn = document.createElement('button');
+      btn.textContent = seg.label;
+      btn.addEventListener('click', seg.onClick);
+      nav.appendChild(btn);
+    } else {
+      nav.appendChild(document.createTextNode(seg.label));
+    }
+  });
+}
+
+function renderKpiCards(totals, prior) {
+  const wrap = $('#kpi-cards');
+  clearKids(wrap);
+  const pt = prior || {};
+  const cards = [
+    {
+      label: 'imputed cost',
+      value: '$' + (totals.cost?.total_usd ?? 0).toFixed(2),
+      delta: prior != null ? mkDelta(totals.cost?.total_usd ?? 0, pt.cost?.total_usd ?? 0, false, v => '$' + Math.abs(v).toFixed(2)) : null,
+    },
+    {
+      label: 'sessions',
+      value: String(totals.sessions ?? 0),
+      delta: prior != null ? mkDelta(totals.sessions ?? 0, pt.sessions ?? 0, true, v => String(Math.abs(Math.round(v)))) : null,
+    },
+    {
+      label: 'total tokens',
+      value: fmt(totals.total_tokens ?? 0),
+      delta: prior != null ? mkDelta(totals.total_tokens ?? 0, pt.total_tokens ?? 0, false, v => fmt(Math.abs(v))) : null,
+    },
+    {
+      label: 'cache hit',
+      value: totals.cache_hit_rate != null ? (totals.cache_hit_rate * 100).toFixed(1) + '%' : '—',
+      delta: prior != null && totals.cache_hit_rate != null && pt.cache_hit_rate != null
+        ? mkDelta(totals.cache_hit_rate, pt.cache_hit_rate, true, v => (Math.abs(v) * 100).toFixed(1) + '%')
+        : null,
+    },
+  ];
+  for (const c of cards) {
+    const card = document.createElement('div');
+    card.className = 'kpi-card';
+    card.appendChild(mkEl('div', c.label, 'kpi-label'));
+    const valEl = mkEl('div', c.value, 'kpi-value');
+    if (c.delta) valEl.appendChild(c.delta);
+    card.appendChild(valEl);
+    wrap.appendChild(card);
+  }
+}
+
+function renderTakes(takes) {
+  const section = $('#takes-section');
+  clearKids(section);
+  if (!takes || takes.length === 0) return;
+  const borderColors = { good: 'var(--green)', warn: 'var(--yellow)', bad: 'var(--red)' };
+  for (const t of takes) {
+    const row = document.createElement('div');
+    row.className = 'take-row';
+    row.style.borderLeftColor = borderColors[t.cls] || 'var(--dim)';
+    row.appendChild(mkEl('span', t.fig, 'take-fig'));
+    const txtEl = document.createElement('span');
+    // Parse <b>...</b> from server-generated text without using innerHTML
+    const parts = t.txt.split(/(<b>[^<]*<\/b>)/g);
+    for (const part of parts) {
+      const m = part.match(/^<b>([^<]*)<\/b>$/);
+      if (m) {
+        txtEl.appendChild(mkEl('b', m[1]));
+      } else {
+        txtEl.appendChild(document.createTextNode(part));
+      }
+    }
+    row.appendChild(txtEl);
+    section.appendChild(row);
+  }
+}
 
 // --- Sortable tables -------------------------------------------------------
 // sortState[tableId] = { idx, dir }  (dir: 1 asc, -1 desc)
@@ -303,50 +416,6 @@ function mkDelta(curr, prior, higherIsBetter, fmtFn) {
   return mkEl('span', sign + fmtFn(delta) + arrow, cls);
 }
 
-function renderHero(t, prior) {
-  const hero = $('#hero');
-  clearKids(hero);
-  hero.appendChild(document.createTextNode('$' + (t.cost?.total_usd ?? 0).toFixed(2)));
-  const sub = mkEl('span', 'imputed · ' + t.since_label, 'sub');
-  hero.appendChild(sub);
-  if (prior != null) {
-    const costDelta = mkDelta(
-      t.cost?.total_usd ?? 0, prior.cost?.total_usd ?? 0,
-      false, v => '$' + Math.abs(v).toFixed(2)
-    );
-    if (costDelta) hero.appendChild(costDelta);
-  }
-
-  const split = $('#hero-split');
-  clearKids(split);
-  const add = (txt, cls) => {
-    if (cls) { const s = mkEl('span', txt, cls); split.appendChild(s); }
-    else split.appendChild(document.createTextNode(txt));
-  };
-  add(' '); add(fmt(t.total_tokens), 'v'); add(' tokens · ');
-  add(String(t.sessions), 'v'); add(' sessions · in ');
-  add(fmt(t.input_tokens), 'v'); add(' · out ');
-  add(fmt(t.output_tokens), 'v'); add(' · cache-write ');
-  add(fmt(t.cache_creation_tokens), 'v'); add(' · cache-read ');
-  add(fmt(t.cache_read_tokens), 'ok');
-  if (t.cache_hit_rate != null) {
-    const pct = (t.cache_hit_rate * 100).toFixed(1) + '%';
-    const cls = t.cache_hit_rate >= 0.85 ? 'ok' : t.cache_hit_rate >= 0.5 ? 'warn' : 'red';
-    add(' · cache hit '); add(pct, cls);
-  }
-  if (prior != null) {
-    const tokDelta = mkDelta(
-      t.total_tokens ?? 0, prior.total_tokens ?? 0,
-      false, v => fmt(Math.abs(v))
-    );
-    const cacheDelta = mkDelta(
-      t.cache_hit_rate ?? 0, prior.cache_hit_rate ?? 0,
-      true, v => (v * 100).toFixed(1) + '%'
-    );
-    if (tokDelta)   { split.appendChild(document.createTextNode(' ')); split.appendChild(tokDelta); }
-    if (cacheDelta) { split.appendChild(document.createTextNode(' ')); split.appendChild(cacheDelta); }
-  }
-}
 
 function fmtCacheHit(rate) {
   if (rate == null) return { text: '—', cls: 'pct' };
@@ -364,14 +433,12 @@ function renderStageTable(rows) {
                       + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
     const tr = mkRow([
       r.stage, r.sessions, r.turns,
-      fmt(r.input_tokens), fmt(r.cache_creation_tokens),
-      fmt(r.cache_read_tokens), fmt(r.output_tokens),
       fmt(totalTokens),
       '$' + (r.cost?.total_usd ?? 0).toFixed(2),
       fmtCacheHit(r.cache_hit_rate),
       { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
     ], rowCls);
-    tr.addEventListener('click', () => toggleBreakdown(tr, 'stage', r.stage, 11));
+    tr.addEventListener('click', () => toggleBreakdown(tr, 'stage', r.stage, 7));
     tbody.appendChild(tr);
   }
 }
@@ -425,9 +492,18 @@ function renderProjectTable(rows, priorRows) {
       fmt(r.total_tokens),
       '$' + (r.cost?.total_usd ?? 0).toFixed(2),
       fmtCacheHit(r.cache_hit_rate),
-      { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
+      '',
       deltaCell,
     ], rowCls);
+    const shareCell = tr.children[6];
+    shareCell.className = 'share-cell';
+    const pctVal = (r.pct_of_total ?? 0).toFixed(1);
+    const bar = document.createElement('div');
+    bar.className = 'share-bar';
+    bar.style.width = pctVal + '%';
+    const txt = mkEl('span', pctVal + '%', 'share-text pct');
+    shareCell.appendChild(bar);
+    shareCell.appendChild(txt);
     const drillTarget = isSysOps ? '__system_ops__' : drillKey;
     tr.addEventListener('click', () => drillIntoProject(label, drillTarget));
     tbody.appendChild(tr);
@@ -457,93 +533,6 @@ function renderModelTable(rows) {
   }
 }
 
-const SVGNS = 'http://www.w3.org/2000/svg';
-function svgEl(tag, attrs) {
-  const e = document.createElementNS(SVGNS, tag);
-  for (const k in attrs) e.setAttribute(k, attrs[k]);
-  return e;
-}
-
-function renderSparkline(rows, since) {
-  const wrap = $('#sparkline-wrap');
-  clearKids(wrap);
-  if (!rows || rows.length === 0) return;
-
-  const W = 1200, H = 150, ml = 48, mr = 12, mt = 14, mb = 26;
-  const plotW = W - ml - mr, plotH = H - mt - mb;
-  // Defensive: coerce missing fields to 0 so a data-shape change degrades to
-  // visible zero-height bars rather than silently blank (NaN > 0 === false).
-  rows = rows.map(r => ({
-    day: r.day || '',
-    user: r.user || 0,
-    subagent: r.subagent || 0,
-    total: r.total || ((r.user || 0) + (r.subagent || 0)),
-  }));
-  const n = rows.length;
-  const peak = Math.max(1, ...rows.map(r => r.total));
-  const avg = rows.reduce((s, r) => s + r.total, 0) / n;
-  const slot = plotW / n, gap = 2, bw = Math.max(1, slot - gap);
-  const BLUE = '#64a0ff', ORANGE = '#FB8C00', DIM = 'rgb(136,136,136)', GRID = 'rgba(255,255,255,0.08)';
-  const yOf = v => mt + plotH - (v / peak) * plotH;
-
-  const svg = svgEl('svg', { width: '100%', height: H, viewBox: `0 0 ${W} ${H}` });
-
-  // gridlines + y labels
-  for (const frac of [0, 0.5, 1]) {
-    const v = peak * frac, yy = yOf(v);
-    svg.appendChild(svgEl('line', { x1: ml, y1: yy, x2: W - mr, y2: yy, stroke: GRID, 'stroke-width': 1 }));
-    const t = svgEl('text', { x: ml - 6, y: yy + 3, fill: DIM, 'font-size': 9, 'text-anchor': 'end' });
-    t.textContent = fmt(v); svg.appendChild(t);
-  }
-
-  // bars (stacked: user bottom, subagent on top) + hover targets
-  const tip = $('#spark-tip');
-  rows.forEach((r, i) => {
-    const x = ml + i * slot + gap / 2;
-    const uh = (r.user / peak) * plotH, sh = (r.subagent / peak) * plotH;
-    const uy = mt + plotH - uh, sy = uy - sh;
-    if (uh > 0) svg.appendChild(svgEl('rect', { x, y: uy, width: bw, height: uh, fill: BLUE }));
-    if (sh > 0) svg.appendChild(svgEl('rect', { x, y: sy, width: bw, height: sh, fill: ORANGE }));
-    // transparent full-height hover target
-    const hit = svgEl('rect', { x: ml + i * slot, y: mt, width: slot, height: plotH, fill: 'transparent' });
-    hit.style.cursor = 'crosshair';
-    hit.addEventListener('mousemove', (e) => {
-      tip.style.display = 'block';
-      tip.style.left = (e.pageX + 12) + 'px';
-      tip.style.top = (e.pageY - 10) + 'px';
-      tip.textContent = `${r.day} · total ${fmt(r.total)} (user ${fmt(r.user)} / sub ${fmt(r.subagent)})`;
-    });
-    hit.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
-    svg.appendChild(hit);
-  });
-
-  // average baseline
-  const ay = yOf(avg);
-  svg.appendChild(svgEl('line', { x1: ml, y1: ay, x2: W - mr, y2: ay, stroke: DIM, 'stroke-width': 1, 'stroke-dasharray': '3,3' }));
-  const at = svgEl('text', { x: W - mr, y: ay - 3, fill: DIM, 'font-size': 9, 'text-anchor': 'end' });
-  at.textContent = `avg ${fmt(avg)}`; svg.appendChild(at);
-
-  // x date ticks
-  for (const idx of new Set([0, n >> 1, n - 1])) {
-    if (idx < 0 || idx >= n) continue;
-    const x = ml + idx * slot + bw / 2;
-    const t = svgEl('text', { x, y: H - 8, fill: DIM, 'font-size': 9, 'text-anchor': 'middle' });
-    t.textContent = rows[idx].day.slice(5); svg.appendChild(t);
-  }
-
-  // legend
-  const lg = (lx, color, label) => {
-    svg.appendChild(svgEl('rect', { x: lx, y: 2, width: 9, height: 9, fill: color }));
-    const t = svgEl('text', { x: lx + 13, y: 10, fill: DIM, 'font-size': 9 });
-    t.textContent = label; svg.appendChild(t);
-  };
-  lg(ml, BLUE, 'user'); lg(ml + 52, ORANGE, 'subagent');
-
-  const sinceLabel = { '24h': '24h', '7d': '7d', '30d': '30d', 'all': 'all-time' }[since] || since || '30d';
-  const cap = mkEl('div', `${sinceLabel} daily tokens — user vs subagent`, 'spark-label');
-  wrap.appendChild(cap);
-  wrap.appendChild(svg);
-}
 
 function renderAgentTable(rows) {
   const tbody = $('#t-agent tbody');
@@ -637,6 +626,7 @@ async function toggleBreakdown(parentTr, dim, key, colspan) {
 
 let currentSessions = [];
 let currentKindSessions = [];  // sessions for the currently-selected kind
+let currentProjectLabel = '';
 
 function _sessionStats(sessions) {
   const count = sessions.length;
@@ -695,6 +685,11 @@ function renderKindPanel(label, allSessions) {
   }
 
   $('#drill-project-label-kind').textContent = label;
+  currentProjectLabel = label;
+  renderBreadcrumb([
+    { label: '~ overview', onClick: showOverview },
+    { label },
+  ]);
   $('#panel-overview').style.display = 'none';
   $('#panel-kind').style.display = 'block';
   $('#panel-sessions').style.display = 'none';
@@ -703,8 +698,11 @@ function renderKindPanel(label, allSessions) {
 function drillIntoKind(kindLabel, kindSessions) {
   currentKindSessions = kindSessions;
   const projectLabel = $('#drill-project-label-kind').textContent;
-  $('#back-link-to-kind').textContent = projectLabel;
-  $('#drill-kind-crumb').textContent = ' / ' + kindLabel;
+  renderBreadcrumb([
+    { label: '~ overview', onClick: showOverview },
+    { label: projectLabel, onClick: showKindPanel },
+    { label: kindLabel },
+  ]);
   if ($('#f-session-search')) $('#f-session-search').value = '';
   $('#panel-kind').style.display = 'none';
   $('#panel-sessions').style.display = 'block';
@@ -820,6 +818,7 @@ async function drillIntoProject(label, projectKey) {
 }
 
 function showOverview() {
+  renderBreadcrumb([{ label: '~ overview' }]);
   renderAttributionPanel([]);
   $('#panel-sessions').style.display = 'none';
   $('#panel-kind').style.display = 'none';
@@ -827,13 +826,14 @@ function showOverview() {
 }
 
 function showKindPanel() {
+  renderBreadcrumb([
+    { label: '~ overview', onClick: showOverview },
+    { label: currentProjectLabel },
+  ]);
   $('#panel-sessions').style.display = 'none';
   $('#panel-kind').style.display = 'block';
 }
 
-$('#back-link').addEventListener('click', showOverview);
-$('#back-link-kind').addEventListener('click', showOverview);
-$('#back-link-to-kind').addEventListener('click', showKindPanel);
 $('#f-session-search') && $('#f-session-search').addEventListener('input', () => renderSessions(currentKindSessions));
 
 let activePreset = '7d';
@@ -916,6 +916,134 @@ function computePriorRange(from, to) {
   return { priorFrom, priorTo };
 }
 
+let _trendChart = null;
+let _donutChart = null;
+
+function renderCharts(sparkline, byModel) {
+  // Destroy previous instances to prevent canvas memory leak on re-render
+  if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
+  if (_donutChart) { _donutChart.destroy(); _donutChart = null; }
+
+  // ── Left: stacked bar (tokens) + cost trend line ──
+  const trendCtx = document.getElementById('chart-trend').getContext('2d');
+  const hasCost = sparkline.some(r => (r.cost_usd || 0) > 0);
+  const scales = {
+    x: {
+      ticks: { color: 'rgb(136,136,136)', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 },
+      grid: { color: 'rgba(255,255,255,0.04)' },
+    },
+    y: {
+      stacked: true,
+      ticks: {
+        color: 'rgb(136,136,136)', font: { size: 9 },
+        callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'k' : String(v),
+      },
+      grid: { color: 'rgba(255,255,255,0.06)' },
+    },
+  };
+  if (hasCost) {
+    scales.y2 = {
+      position: 'right',
+      grid: { drawOnChartArea: false },
+      ticks: { color: '#D97757', font: { size: 9 }, callback: v => '$' + v.toFixed(2) },
+    };
+  }
+  const datasets = [
+    {
+      type: 'bar', label: 'user', stack: 'tok', yAxisID: 'y',
+      data: sparkline.map(r => r.user),
+      backgroundColor: 'rgba(100,160,255,0.75)',
+    },
+    {
+      type: 'bar', label: 'subagent', stack: 'tok', yAxisID: 'y',
+      data: sparkline.map(r => r.subagent),
+      backgroundColor: 'rgba(251,140,0,0.75)',
+    },
+  ];
+  if (hasCost) {
+    datasets.push({
+      type: 'line', label: 'cost ($)', yAxisID: 'y2',
+      data: sparkline.map(r => r.cost_usd || 0),
+      borderColor: '#D97757', backgroundColor: 'transparent',
+      borderWidth: 1.5, pointRadius: 2, tension: 0.3,
+    });
+  }
+  _trendChart = new Chart(trendCtx, {
+    data: { labels: sparkline.map(r => r.day.slice(5)), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: 'rgb(136,136,136)', font: { size: 10 } } },
+        tooltip: {
+          callbacks: {
+            title: items => sparkline[items[0].dataIndex]?.day || '',
+            afterBody: items => {
+              const r = sparkline[items[0].dataIndex];
+              if (!r) return [];
+              const lines = ['total: ' + fmt(r.total)];
+              if (r.cost_usd != null) lines.push('cost: $' + r.cost_usd.toFixed(4));
+              return lines;
+            },
+          },
+        },
+      },
+      scales,
+    },
+  });
+
+  // ── Right: model share donut ──
+  const donutCtx = document.getElementById('chart-donut').getContext('2d');
+  const donutPanel = donutCtx.canvas.parentElement;
+  if (!byModel || byModel.length <= 1) {
+    donutPanel.style.display = 'none';
+    return;
+  }
+  donutPanel.style.display = '';
+  const palette = ['#64a0ff','#FB8C00','#43A047','#E53935','#AB47BC','#00ACC1','#FFB300','#8D6E63'];
+  const totalTok = byModel.reduce((s, r) => s + r.total_tokens, 0);
+  _donutChart = new Chart(donutCtx, {
+    type: 'doughnut',
+    data: {
+      labels: byModel.map(r => r.model),
+      datasets: [{
+        data: byModel.map(r => r.total_tokens),
+        backgroundColor: byModel.map((_, i) => palette[i % palette.length]),
+        borderWidth: 1,
+        borderColor: '#1a1918',
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: 'rgb(136,136,136)', font: { size: 9 }, boxWidth: 10, padding: 6,
+            generateLabels: chart => {
+              const meta = chart.getDatasetMeta(0);
+              return chart.data.labels.map((label, i) => ({
+                text: label.replace('claude-', '').slice(0, 22) + ' ' + ((byModel[i].total_tokens / totalTok) * 100).toFixed(0) + '%',
+                fillStyle: palette[i % palette.length],
+                hidden: meta.data[i]?.hidden,
+                index: i,
+              }));
+            },
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const r = byModel[ctx.dataIndex];
+              const pct = ((r.total_tokens / totalTok) * 100).toFixed(1);
+              return fmt(r.total_tokens) + ' tokens (' + pct + '%)';
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 async function load() {
   const project = $('#f-project').value.trim();
   const from = $('#f-from').value;
@@ -947,9 +1075,9 @@ async function load() {
     const [resp, priorResp] = await Promise.all([fetchCurrent, fetchPrior || Promise.resolve(null)]);
     const d = await resp.json();
     const priorData = priorResp ? await priorResp.json() : null;
-    renderHero(d.totals, priorData ? priorData.totals : null);
-    const sinceLabel = activePreset !== 'all' && from ? `${from} → ${to || 'now'}` : 'all-time';
-    renderSparkline(d.sparkline, sinceLabel);
+    renderKpiCards(d.totals, priorData ? priorData.totals : null);
+    renderTakes(d.takes || []);
+    renderCharts(d.sparkline || [], d.by_model || []);
     renderStageTable(d.by_stage);
     renderProjectTable(d.by_project, priorData ? priorData.by_project : null);
     renderModelTable(d.by_model);
@@ -1001,6 +1129,7 @@ document.querySelectorAll('.preset-btn').forEach(b =>
 $('#f-kind') && $('#f-kind').addEventListener('change', load);
 applyPreset('7d');
 setInterval(load, 30000);
+renderBreadcrumb([{ label: '~ overview' }]);
 </script>
 </body>
 </html>

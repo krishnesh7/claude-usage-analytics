@@ -284,6 +284,16 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
         "total": r["user_tokens"] + r["subagent_tokens"],
     } for r in timeline_rows if r["day"]]
 
+    # Compute daily cost: group by day across models, then price each day.
+    cost_by_day_rows = dbmod.daily_cost_by_day(since=since_dt, until=until_dt, project=project, kind=kind)
+    day_cost: dict[str, float] = {}
+    for r in cost_by_day_rows:
+        if r["day"]:
+            c = pricing_mod.total_cost([r], prices)
+            day_cost[r["day"]] = day_cost.get(r["day"], 0.0) + c.total_usd
+    for row in sparkline:
+        row["cost_usd"] = round(day_cost.get(row["day"], 0.0), 4)
+
     top_skills = dbmod.top_skills(project=project, since=since_dt, limit=15, until=until_dt)
 
     # Grand totals + cache hit-rate

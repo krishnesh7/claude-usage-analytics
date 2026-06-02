@@ -46,18 +46,21 @@ def price_for(model: str | None, prices: dict) -> dict:
 
 
 def impute_cost(row: dict, prices: dict) -> Cost:
-    """row has keys: model, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens.
+    """row has keys: model, input_tokens, cache_creation_tokens, cache_creation_1h_tokens,
+    cache_read_tokens, output_tokens.
 
-    We assume cache_creation = 5m ephemeral (the cheaper write tier). The JSONL
-    differentiates 5m vs 1h but the SQL schema combines them; refining this is
-    deferred until it matters.
+    cache_creation_tokens is the total; cache_creation_1h_tokens is the 1h subset.
+    The remainder (total - 1h) is 5m ephemeral.
     """
     p = price_for(row.get("model"), prices)
     M = 1_000_000.0
+    cc_total = row.get("cache_creation_tokens", 0) or 0
+    cc_1h = row.get("cache_creation_1h_tokens", 0) or 0
+    cc_5m = cc_total - cc_1h
     return Cost(
         input_usd=(row.get("input_tokens", 0) or 0) * p.get("input", 0) / M,
         output_usd=(row.get("output_tokens", 0) or 0) * p.get("output", 0) / M,
-        cache_write_usd=(row.get("cache_creation_tokens", 0) or 0) * p.get("cache_write_5m", 0) / M,
+        cache_write_usd=(cc_5m * p.get("cache_write_5m", 0) + cc_1h * p.get("cache_write_1h", 0)) / M,
         cache_read_usd=(row.get("cache_read_tokens", 0) or 0) * p.get("cache_read", 0) / M,
     )
 

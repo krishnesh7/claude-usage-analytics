@@ -514,7 +514,7 @@ def daily_cost_by_day(
     """
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " GROUP BY day, COALESCE(t.model, 'unknown') ORDER BY day ASC"
+    sql += " GROUP BY date(COALESCE(t.ts, s.started_at)), COALESCE(t.model, 'unknown') ORDER BY day ASC"
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]
 

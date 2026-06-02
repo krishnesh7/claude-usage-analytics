@@ -24,9 +24,9 @@ def test_daily_cost_by_day_returns_day_model_tokens(db):
     rows = daily_cost_by_day()
 
     assert len(rows) == 2
-    days = {r["day"] for r in rows}
-    assert "2026-05-01" in days
-    assert "2026-05-02" in days
+    by_day = {r["day"]: r for r in rows}
+    assert "2026-05-01" in by_day
+    assert "2026-05-02" in by_day
     for r in rows:
         assert "day" in r
         assert "model" in r
@@ -34,6 +34,30 @@ def test_daily_cost_by_day_returns_day_model_tokens(db):
         assert "cache_creation_tokens" in r
         assert "cache_read_tokens" in r
         assert "output_tokens" in r
+    row_day1 = by_day["2026-05-01"]
+    assert row_day1["input_tokens"] == 1000
+    assert row_day1["output_tokens"] == 500
+    assert row_day1["cache_creation_tokens"] == 0
+    assert row_day1["cache_read_tokens"] == 0
+    row_day2 = by_day["2026-05-02"]
+    assert row_day2["input_tokens"] == 200
+    assert row_day2["output_tokens"] == 100
+
+
+def test_daily_cost_by_day_project_filter(db):
+    _insert_turn(db, "s1", "proj_a", "2026-05-01T10:00:00", "claude-3-5-sonnet-20241022", input_tokens=300, output_tokens=150)
+    _insert_turn(db, "s2", "proj_a", "2026-05-02T10:00:00", "claude-3-5-sonnet-20241022", input_tokens=400, output_tokens=200)
+    _insert_turn(db, "s3", "proj_b", "2026-05-01T10:00:00", "claude-3-5-sonnet-20241022", input_tokens=999, output_tokens=888)
+
+    rows = daily_cost_by_day(project="proj_a")
+
+    assert len(rows) == 2
+    days = {r["day"] for r in rows}
+    assert "2026-05-01" in days
+    assert "2026-05-02" in days
+    by_day = {r["day"]: r for r in rows}
+    assert by_day["2026-05-01"]["input_tokens"] == 300
+    assert by_day["2026-05-02"]["input_tokens"] == 400
 
 
 def test_daily_cost_by_day_respects_since_filter(db):

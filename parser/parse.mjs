@@ -153,11 +153,6 @@ CREATE TABLE IF NOT EXISTS session_attribution (
 );
 `)
 
-// Migration guard for existing DBs: add cache_creation_1h_tokens if it doesn't exist.
-try {
-  db.prepare('ALTER TABLE turns ADD COLUMN cache_creation_1h_tokens INTEGER DEFAULT 0').run()
-} catch (_) { /* column already exists in this DB */ }
-
 // Idempotent migrations: add columns if they don't exist yet.
 // SQLite ALTER TABLE has no IF NOT EXISTS for columns, so we try/catch.
 for (const col of [
@@ -166,6 +161,7 @@ for (const col of [
   "ALTER TABLE sessions ADD COLUMN project_name TEXT",
   "ALTER TABLE sessions ADD COLUMN worktree_branch TEXT",
   "ALTER TABLE sessions ADD COLUMN subagent_description TEXT",
+  "ALTER TABLE turns ADD COLUMN cache_creation_1h_tokens INTEGER DEFAULT 0",
 ]) {
   try { db.prepare(col).run() } catch { /* column already exists */ }
 }

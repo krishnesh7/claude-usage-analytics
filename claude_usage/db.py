@@ -490,7 +490,7 @@ def daily_cost_by_day(
 ) -> list[dict]:
     """Per-day, per-model token rows for cost imputation across a date range.
 
-    Returns [{day, model, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens}]
+    Returns [{day, model, input_tokens, cache_creation_tokens, cache_creation_1h_tokens, cache_read_tokens, output_tokens}]
     for each (day, model) combination. Used by _view.build() to add cost_usd to sparkline rows.
     """
     where: list[str] = []

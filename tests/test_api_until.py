@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS turns (
   model TEXT,
   input_tokens INTEGER DEFAULT 0,
   cache_creation_tokens INTEGER DEFAULT 0,
+  cache_creation_1h_tokens INTEGER DEFAULT 0,
   cache_read_tokens INTEGER DEFAULT 0,
   output_tokens INTEGER DEFAULT 0,
   service_tier TEXT

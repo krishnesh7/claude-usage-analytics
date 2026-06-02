@@ -324,6 +324,7 @@ def turns_by_model(
           COALESCE(t.model, 'unknown') AS model,
           COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
           COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
+          COALESCE(SUM(t.cache_creation_1h_tokens), 0) AS cache_creation_1h_tokens,
           COALESCE(SUM(t.cache_read_tokens), 0) AS cache_read_tokens,
           COALESCE(SUM(t.output_tokens), 0) AS output_tokens,
           COUNT(t.id) AS turns
@@ -347,6 +348,7 @@ def turns_by_model_for_stage(
           COALESCE(t.model, 'unknown') AS model,
           COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
           COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
+          COALESCE(SUM(t.cache_creation_1h_tokens), 0) AS cache_creation_1h_tokens,
           COALESCE(SUM(t.cache_read_tokens), 0) AS cache_read_tokens,
           COALESCE(SUM(t.output_tokens), 0) AS output_tokens,
           COUNT(t.id) AS turns
@@ -515,6 +517,7 @@ def daily_cost_by_day(
                COALESCE(t.model, 'unknown') AS model,
                COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
                COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
+               COALESCE(SUM(t.cache_creation_1h_tokens), 0) AS cache_creation_1h_tokens,
                COALESCE(SUM(t.cache_read_tokens), 0) AS cache_read_tokens,
                COALESCE(SUM(t.output_tokens), 0) AS output_tokens
         FROM sessions s
@@ -542,6 +545,7 @@ def turns_by_model_for_day(
         SELECT COALESCE(t.model, 'unknown') AS model,
                COALESCE(SUM(t.input_tokens),0) AS input_tokens,
                COALESCE(SUM(t.cache_creation_tokens),0) AS cache_creation_tokens,
+               COALESCE(SUM(t.cache_creation_1h_tokens),0) AS cache_creation_1h_tokens,
                COALESCE(SUM(t.cache_read_tokens),0) AS cache_read_tokens,
                COALESCE(SUM(t.output_tokens),0) AS output_tokens,
                COUNT(t.id) AS turns

@@ -96,6 +96,37 @@
   table.inner-breakdown th { color: var(--dim); font-size: 10px; padding: 3px 8px; }
   table.inner-breakdown td { padding: 3px 8px; border-bottom: 1px dashed rgba(255,255,255,0.04); }
   table.inner-breakdown td:first-child { color: var(--blue); }
+
+  /* ── Persistent header ── */
+  .navbar { background: var(--tb); border-radius: 8px 8px 0 0; padding: 11px 14px; display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--outline); }
+  .filter-bar { background: var(--tb); padding: 8px 14px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--outline); }
+  .filter-bar label { color: var(--dim); font-size: 11px; }
+  .filter-bar input, .filter-bar select, .filter-bar button { background: rgba(255,255,255,0.04); border: 1px solid var(--outline); color: var(--fg); padding: 6px 10px; border-radius: 4px; font: inherit; }
+  .filter-bar button { cursor: pointer; }
+  .filter-bar button:hover { background: rgba(255,255,255,0.08); }
+  .breadcrumb-nav { margin-left: 14px; color: var(--dim); font-size: 11px; display: flex; align-items: center; gap: 4px; flex: 1; }
+  .breadcrumb-nav button { background: none; border: none; color: var(--blue); cursor: pointer; font: inherit; font-size: 11px; padding: 0; text-decoration: underline; }
+  .breadcrumb-sep { color: var(--dim); margin: 0 2px; }
+
+  /* ── KPI cards ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .kpi-card { background: rgba(255,255,255,0.03); border: 1px solid var(--outline); border-radius: 6px; padding: 14px 18px; }
+  .kpi-label { color: var(--dim); font-size: 11px; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+
+  /* ── Insight callouts (takes) ── */
+  #takes-section { margin-bottom: 16px; }
+  .take-row { display: flex; gap: 14px; align-items: baseline; border-left: 3px solid var(--dim); padding: 4px 10px; margin-bottom: 5px; font-size: 12px; line-height: 1.4; }
+  .take-fig { color: var(--clay); min-width: 56px; font-weight: 600; flex-shrink: 0; }
+
+  /* ── Charts row ── */
+  .charts-row { display: grid; grid-template-columns: 1fr 240px; gap: 14px; margin-bottom: 22px; }
+  .chart-panel { background: rgba(255,255,255,0.02); border: 1px solid var(--outline); border-radius: 4px; padding: 10px; position: relative; height: 200px; }
+
+  /* ── Inline share bar ── */
+  .share-cell { position: relative; overflow: hidden; }
+  .share-bar { position: absolute; top: 0; left: 0; height: 100%; background: rgba(100,160,255,0.10); pointer-events: none; }
+  .share-text { position: relative; }
 </style>
 </head>
 <body>

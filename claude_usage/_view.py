@@ -285,7 +285,7 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
     } for r in timeline_rows if r["day"]]
 
     # Compute daily cost: group by day across models, then price each day.
-    cost_by_day_rows = dbmod.daily_cost_by_day(since=since_dt, until=until_dt, project=project)
+    cost_by_day_rows = dbmod.daily_cost_by_day(since=since_dt, until=until_dt, project=project, kind=kind)
     day_cost: dict[str, float] = {}
     for r in cost_by_day_rows:
         if r["day"]:

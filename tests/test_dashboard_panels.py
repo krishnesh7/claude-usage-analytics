@@ -70,6 +70,28 @@ def test_daily_cost_by_day_respects_since_filter(db):
     assert len(rows) == 1
 
 
+def test_daily_cost_by_day_kind_filter(db):
+    _insert_turn(db, "s_user", "proj", "2026-05-01T10:00:00", "claude-3-5-sonnet-20241022", input_tokens=1000, output_tokens=500)
+    # subagent session has parent_session_id set
+    conn = __import__('sqlite3').connect(str(db))
+    conn.execute("INSERT INTO sessions(session_id, project_name, started_at, parent_session_id) VALUES (?,?,?,?)",
+                 ("s_sub", "proj", "2026-05-01T11:00:00", "s_user"))
+    conn.execute("INSERT INTO turns(session_id, ts, model, input_tokens, output_tokens) VALUES (?,?,?,?,?)",
+                 ("s_sub", "2026-05-01T11:00:00", "claude-3-5-sonnet-20241022", 500, 200))
+    conn.commit()
+    conn.close()
+
+    # user-only: should only return tokens from s_user
+    user_rows = daily_cost_by_day(kind="user")
+    user_total = sum(r["input_tokens"] for r in user_rows)
+    assert user_total == 1000, f"Expected 1000 user input tokens, got {user_total}"
+
+    # all: should return tokens from both sessions
+    all_rows = daily_cost_by_day(kind="all")
+    all_total = sum(r["input_tokens"] for r in all_rows)
+    assert all_total == 1500, f"Expected 1500 total input tokens, got {all_total}"
+
+
 def test_build_sparkline_has_cost_usd(db):
     _insert_turn(db, "s1", "proj", "2026-05-01T10:00:00", "claude-3-5-sonnet-20241022", input_tokens=1000, output_tokens=500)
     from claude_usage._view import build

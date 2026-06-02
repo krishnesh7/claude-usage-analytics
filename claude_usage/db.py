@@ -484,6 +484,7 @@ def daily_cost_by_day(
     since: "datetime | None" = None,
     until: "datetime | None" = None,
     project: str | None = None,
+    kind: str | None = None,
 ) -> list[dict]:
     """Per-day, per-model token rows for cost imputation across a date range.
 
@@ -502,6 +503,13 @@ def daily_cost_by_day(
     if until is not None:
         where.append("COALESCE(t.ts, s.started_at) <= ?")
         params.append(until.isoformat())
+    if kind and kind != "all":
+        if kind == "user":
+            where.append("(s.parent_session_id IS NULL AND s.session_id NOT LIKE '%::agent-%' AND COALESCE(s.is_tracker_overhead, 0) = 0)")
+        elif kind == "subagent":
+            where.append("(s.parent_session_id IS NOT NULL OR s.session_id LIKE '%::agent-%')")
+        elif kind == "tracker":
+            where.append("COALESCE(s.is_tracker_overhead, 0) = 1")
     sql = """
         SELECT date(COALESCE(t.ts, s.started_at)) AS day,
                COALESCE(t.model, 'unknown') AS model,

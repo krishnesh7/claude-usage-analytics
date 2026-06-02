@@ -626,6 +626,7 @@ async function toggleBreakdown(parentTr, dim, key, colspan) {
 
 let currentSessions = [];
 let currentKindSessions = [];  // sessions for the currently-selected kind
+let currentProjectLabel = '';
 
 function _sessionStats(sessions) {
   const count = sessions.length;
@@ -684,6 +685,7 @@ function renderKindPanel(label, allSessions) {
   }
 
   $('#drill-project-label-kind').textContent = label;
+  currentProjectLabel = label;
   renderBreadcrumb([
     { label: '~ overview', onClick: showOverview },
     { label },
@@ -824,6 +826,10 @@ function showOverview() {
 }
 
 function showKindPanel() {
+  renderBreadcrumb([
+    { label: '~ overview', onClick: showOverview },
+    { label: currentProjectLabel },
+  ]);
   $('#panel-sessions').style.display = 'none';
   $('#panel-kind').style.display = 'block';
 }

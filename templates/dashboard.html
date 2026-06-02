@@ -260,6 +260,89 @@ function mkEl(tag, text, cls) {
 }
 function clearKids(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
+function renderBreadcrumb(segments) {
+  const nav = $('#breadcrumb');
+  clearKids(nav);
+  segments.forEach((seg, i) => {
+    if (i > 0) {
+      nav.appendChild(mkEl('span', ' / ', 'breadcrumb-sep'));
+    }
+    if (seg.onClick) {
+      const btn = document.createElement('button');
+      btn.textContent = seg.label;
+      btn.addEventListener('click', seg.onClick);
+      nav.appendChild(btn);
+    } else {
+      nav.appendChild(document.createTextNode(seg.label));
+    }
+  });
+}
+
+function renderKpiCards(totals, prior) {
+  const wrap = $('#kpi-cards');
+  clearKids(wrap);
+  const pt = prior || {};
+  const cards = [
+    {
+      label: 'imputed cost',
+      value: '$' + (totals.cost?.total_usd ?? 0).toFixed(2),
+      delta: prior != null ? mkDelta(totals.cost?.total_usd ?? 0, pt.cost?.total_usd ?? 0, false, v => '$' + Math.abs(v).toFixed(2)) : null,
+    },
+    {
+      label: 'sessions',
+      value: String(totals.sessions ?? 0),
+      delta: prior != null ? mkDelta(totals.sessions ?? 0, pt.sessions ?? 0, true, v => String(Math.abs(Math.round(v)))) : null,
+    },
+    {
+      label: 'total tokens',
+      value: fmt(totals.total_tokens ?? 0),
+      delta: prior != null ? mkDelta(totals.total_tokens ?? 0, pt.total_tokens ?? 0, false, v => fmt(Math.abs(v))) : null,
+    },
+    {
+      label: 'cache hit',
+      value: totals.cache_hit_rate != null ? (totals.cache_hit_rate * 100).toFixed(1) + '%' : '—',
+      delta: prior != null && totals.cache_hit_rate != null && pt.cache_hit_rate != null
+        ? mkDelta(totals.cache_hit_rate, pt.cache_hit_rate, true, v => (Math.abs(v) * 100).toFixed(1) + '%')
+        : null,
+    },
+  ];
+  for (const c of cards) {
+    const card = document.createElement('div');
+    card.className = 'kpi-card';
+    card.appendChild(mkEl('div', c.label, 'kpi-label'));
+    const valEl = mkEl('div', c.value, 'kpi-value');
+    if (c.delta) valEl.appendChild(c.delta);
+    card.appendChild(valEl);
+    wrap.appendChild(card);
+  }
+}
+
+function renderTakes(takes) {
+  const section = $('#takes-section');
+  clearKids(section);
+  if (!takes || takes.length === 0) return;
+  const borderColors = { good: 'var(--green)', warn: 'var(--yellow)', bad: 'var(--red)' };
+  for (const t of takes) {
+    const row = document.createElement('div');
+    row.className = 'take-row';
+    row.style.borderLeftColor = borderColors[t.cls] || 'var(--dim)';
+    row.appendChild(mkEl('span', t.fig, 'take-fig'));
+    const txtEl = document.createElement('span');
+    // Parse <b>...</b> from server-generated text without using innerHTML
+    const parts = t.txt.split(/(<b>[^<]*<\/b>)/g);
+    for (const part of parts) {
+      const m = part.match(/^<b>([^<]*)<\/b>$/);
+      if (m) {
+        txtEl.appendChild(mkEl('b', m[1]));
+      } else {
+        txtEl.appendChild(document.createTextNode(part));
+      }
+    }
+    row.appendChild(txtEl);
+    section.appendChild(row);
+  }
+}
+
 // --- Sortable tables -------------------------------------------------------
 // sortState[tableId] = { idx, dir }  (dir: 1 asc, -1 desc)
 const sortState = {};
@@ -725,6 +808,10 @@ function renderKindPanel(label, allSessions) {
   }
 
   $('#drill-project-label-kind').textContent = label;
+  renderBreadcrumb([
+    { label: '~ overview', onClick: showOverview },
+    { label },
+  ]);
   $('#panel-overview').style.display = 'none';
   $('#panel-kind').style.display = 'block';
   $('#panel-sessions').style.display = 'none';
@@ -733,8 +820,11 @@ function renderKindPanel(label, allSessions) {
 function drillIntoKind(kindLabel, kindSessions) {
   currentKindSessions = kindSessions;
   const projectLabel = $('#drill-project-label-kind').textContent;
-  $('#back-link-to-kind').textContent = projectLabel;
-  $('#drill-kind-crumb').textContent = ' / ' + kindLabel;
+  renderBreadcrumb([
+    { label: '~ overview', onClick: showOverview },
+    { label: projectLabel, onClick: showKindPanel },
+    { label: kindLabel },
+  ]);
   if ($('#f-session-search')) $('#f-session-search').value = '';
   $('#panel-kind').style.display = 'none';
   $('#panel-sessions').style.display = 'block';
@@ -850,6 +940,7 @@ async function drillIntoProject(label, projectKey) {
 }
 
 function showOverview() {
+  renderBreadcrumb([{ label: '~ overview' }]);
   renderAttributionPanel([]);
   $('#panel-sessions').style.display = 'none';
   $('#panel-kind').style.display = 'none';
@@ -861,9 +952,6 @@ function showKindPanel() {
   $('#panel-kind').style.display = 'block';
 }
 
-$('#back-link').addEventListener('click', showOverview);
-$('#back-link-kind').addEventListener('click', showOverview);
-$('#back-link-to-kind').addEventListener('click', showKindPanel);
 $('#f-session-search') && $('#f-session-search').addEventListener('input', () => renderSessions(currentKindSessions));
 
 let activePreset = '7d';

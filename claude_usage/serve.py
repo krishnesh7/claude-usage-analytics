@@ -125,7 +125,7 @@ def make_app() -> FastAPI:
             # per-session cost: query turns directly
             with dbmod.connect() as c:
                 turns = [dict(t) for t in c.execute(
-                    "SELECT model, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens FROM turns WHERE session_id = ?",
+                    "SELECT model, input_tokens, cache_creation_tokens, cache_creation_1h_tokens, cache_read_tokens, output_tokens FROM turns WHERE session_id = ?",
                     (r["session_id"],),
                 )]
             r["cost"] = pricing_mod.cost_dict(pricing_mod.total_cost(turns, prices))

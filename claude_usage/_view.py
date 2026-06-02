@@ -257,9 +257,9 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
         m = t.get("model") or "unknown"
         agg = by_model.setdefault(m, {
             "model": m, "input_tokens": 0, "cache_creation_tokens": 0,
-            "cache_read_tokens": 0, "output_tokens": 0,
+            "cache_creation_1h_tokens": 0, "cache_read_tokens": 0, "output_tokens": 0,
         })
-        for k in ("input_tokens", "cache_creation_tokens", "cache_read_tokens", "output_tokens"):
+        for k in ("input_tokens", "cache_creation_tokens", "cache_creation_1h_tokens", "cache_read_tokens", "output_tokens"):
             agg[k] += t.get(k, 0) or 0
     by_model_list = [v for v in by_model.values()
                      if _total_tokens(v) > 0 and v["model"] not in ("<synthetic>", "unknown")]
@@ -269,7 +269,7 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
         for k in ("input_tokens", "cache_creation_tokens", "cache_read_tokens", "output_tokens"):
             r[k + "_h"] = _fmt(r[k])
         single = [{"model": r["model"], **{k: r[k] for k in (
-            "input_tokens", "cache_creation_tokens", "cache_read_tokens", "output_tokens"
+            "input_tokens", "cache_creation_tokens", "cache_creation_1h_tokens", "cache_read_tokens", "output_tokens"
         )}}]
         r["cost"] = pricing_mod.cost_dict(pricing_mod.total_cost(single, prices))
         r["cache_hit_rate"] = _cache_hit_rate(r)

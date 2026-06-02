@@ -128,41 +128,45 @@
   .share-bar { position: absolute; top: 0; left: 0; height: 100%; background: rgba(100,160,255,0.10); pointer-events: none; }
   .share-text { position: relative; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="term">
-  <div class="titlebar">
+  <div class="navbar">
     <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-    <span class="path">~ • cu serve · <span id="live"><span class="live-dot" id="live-dot"></span><span id="live-text">live</span></span></span>
+    <span id="breadcrumb" class="breadcrumb-nav"></span>
+    <span id="live" style="margin-left:auto;font-size:11px;color:var(--dim)"><span class="live-dot" id="live-dot"></span><span id="live-text">live</span></span>
+  </div>
+  <div class="filter-bar">
+    <label>project <input id="f-project" placeholder="(all)" style="width:200px"></label>
+    <span id="preset-btns">
+      <button class="preset-btn" data-preset="24h">24h</button>
+      <button class="preset-btn active" data-preset="7d">7d</button>
+      <button class="preset-btn" data-preset="30d">30d</button>
+      <button class="preset-btn" data-preset="all">all</button>
+    </span>
+    <label>from <input type="date" id="f-from" style="width:120px"></label>
+    <label>to <input type="date" id="f-to" style="width:120px"></label>
+    <label>kind
+      <select id="f-kind">
+        <option value="user" selected>user only</option>
+        <option value="subagent">subagent only</option>
+        <option value="tracker">tracker</option>
+        <option value="all">all</option>
+      </select>
+    </label>
+    <button id="refresh">↺ refresh</button>
   </div>
   <div class="term-body">
-    <div class="controls">
-      <label>project <input id="f-project" placeholder="(all)" style="width: 200px"></label>
-      <span id="preset-btns">
-        <button class="preset-btn" data-preset="24h">24h</button>
-        <button class="preset-btn active" data-preset="7d">7d</button>
-        <button class="preset-btn" data-preset="30d">30d</button>
-        <button class="preset-btn" data-preset="all">all</button>
-      </span>
-      <label>from <input type="date" id="f-from" style="width:120px"></label>
-      <label>to <input type="date" id="f-to" style="width:120px"></label>
-      <label>kind
-        <select id="f-kind">
-          <option value="user" selected>user only</option>
-          <option value="subagent">subagent only</option>
-          <option value="tracker">tracker</option>
-          <option value="all">all</option>
-        </select>
-      </label>
-      <button id="refresh">↺ refresh</button>
-    </div>
 
     <!-- Overview panel -->
     <div id="panel-overview">
-      <div id="hero" class="hero"></div>
-      <div id="hero-split" class="hero-split"></div>
-      <div id="sparkline-wrap" class="sparkline-wrap"></div>
-      <div id="spark-tip" class="spark-tip"></div>
+      <div id="kpi-cards" class="kpi-row"></div>
+      <div id="takes-section"></div>
+      <div class="charts-row">
+        <div class="chart-panel"><canvas id="chart-trend"></canvas></div>
+        <div class="chart-panel"><canvas id="chart-donut"></canvas></div>
+      </div>
 
       <h2 id="h-project">by project</h2>
       <p class="hint">Click a row to drill into individual sessions.</p>
@@ -183,7 +187,10 @@
       <h2>by SDLC stage</h2>
       <p class="hint">Click a row to see the project distribution for that stage.</p>
       <table id="t-stage">
-        <thead><tr><th>stage</th><th>sess</th><th>turns</th><th>input</th><th>cache·write</th><th>cache·read</th><th>output</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th></tr></thead>
+        <colgroup>
+          <col class="c-name"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-pct"><col class="c-pct">
+        </colgroup>
+        <thead><tr><th>stage</th><th>sess</th><th>turns</th><th>tokens</th><th>cost</th><th>cache·hit</th><th>%</th></tr></thead>
         <tbody></tbody>
       </table>
 
@@ -203,10 +210,7 @@
 
     <!-- Kind selector panel (middle layer) -->
     <div id="panel-kind">
-      <div class="breadcrumb">
-        <button id="back-link-kind">← all projects</button>
-        <span> / </span><span id="drill-project-label-kind"></span>
-      </div>
+      <span id="drill-project-label-kind" style="display:none"></span>
       <h2>session breakdown</h2>
       <div id="kind-cards" class="kind-cards"></div>
       <div id="attr-section" style="display:none;margin-top:20px">
@@ -220,12 +224,7 @@
 
     <!-- Sessions drill-down panel -->
     <div id="panel-sessions">
-      <div class="breadcrumb">
-        <button id="back-link">← all projects</button>
-        <span> / </span>
-        <button id="back-link-to-kind" style="background:none;border:none;color:var(--blue);cursor:pointer;font:inherit;padding:0;text-decoration:underline;"></button>
-        <span id="drill-kind-crumb"></span>
-      </div>
+
       <h2>sessions</h2>
       <input id="f-session-search" class="session-search" placeholder="filter sessions by label…">
 

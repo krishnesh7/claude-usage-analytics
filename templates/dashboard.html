@@ -1034,6 +1034,134 @@ function computePriorRange(from, to) {
   return { priorFrom, priorTo };
 }
 
+let _trendChart = null;
+let _donutChart = null;
+
+function renderCharts(sparkline, byModel) {
+  // Destroy previous instances to prevent canvas memory leak on re-render
+  if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
+  if (_donutChart) { _donutChart.destroy(); _donutChart = null; }
+
+  // ── Left: stacked bar (tokens) + cost trend line ──
+  const trendCtx = document.getElementById('chart-trend').getContext('2d');
+  const hasCost = sparkline.some(r => (r.cost_usd || 0) > 0);
+  const scales = {
+    x: {
+      ticks: { color: 'rgb(136,136,136)', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 },
+      grid: { color: 'rgba(255,255,255,0.04)' },
+    },
+    y: {
+      stacked: true,
+      ticks: {
+        color: 'rgb(136,136,136)', font: { size: 9 },
+        callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'k' : String(v),
+      },
+      grid: { color: 'rgba(255,255,255,0.06)' },
+    },
+  };
+  if (hasCost) {
+    scales.y2 = {
+      position: 'right',
+      grid: { drawOnChartArea: false },
+      ticks: { color: '#D97757', font: { size: 9 }, callback: v => '$' + v.toFixed(2) },
+    };
+  }
+  const datasets = [
+    {
+      type: 'bar', label: 'user', stack: 'tok', yAxisID: 'y',
+      data: sparkline.map(r => r.user),
+      backgroundColor: 'rgba(100,160,255,0.75)',
+    },
+    {
+      type: 'bar', label: 'subagent', stack: 'tok', yAxisID: 'y',
+      data: sparkline.map(r => r.subagent),
+      backgroundColor: 'rgba(251,140,0,0.75)',
+    },
+  ];
+  if (hasCost) {
+    datasets.push({
+      type: 'line', label: 'cost ($)', yAxisID: 'y2',
+      data: sparkline.map(r => r.cost_usd || 0),
+      borderColor: '#D97757', backgroundColor: 'transparent',
+      borderWidth: 1.5, pointRadius: 2, tension: 0.3,
+    });
+  }
+  _trendChart = new Chart(trendCtx, {
+    data: { labels: sparkline.map(r => r.day.slice(5)), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: 'rgb(136,136,136)', font: { size: 10 } } },
+        tooltip: {
+          callbacks: {
+            title: items => sparkline[items[0].dataIndex]?.day || '',
+            afterBody: items => {
+              const r = sparkline[items[0].dataIndex];
+              if (!r) return [];
+              const lines = ['total: ' + fmt(r.total)];
+              if (r.cost_usd != null) lines.push('cost: $' + r.cost_usd.toFixed(4));
+              return lines;
+            },
+          },
+        },
+      },
+      scales,
+    },
+  });
+
+  // ── Right: model share donut ──
+  const donutCtx = document.getElementById('chart-donut').getContext('2d');
+  const donutPanel = donutCtx.canvas.parentElement;
+  if (!byModel || byModel.length <= 1) {
+    donutPanel.style.display = 'none';
+    return;
+  }
+  donutPanel.style.display = '';
+  const palette = ['#64a0ff','#FB8C00','#43A047','#E53935','#AB47BC','#00ACC1','#FFB300','#8D6E63'];
+  const totalTok = byModel.reduce((s, r) => s + r.total_tokens, 0);
+  _donutChart = new Chart(donutCtx, {
+    type: 'doughnut',
+    data: {
+      labels: byModel.map(r => r.model),
+      datasets: [{
+        data: byModel.map(r => r.total_tokens),
+        backgroundColor: byModel.map((_, i) => palette[i % palette.length]),
+        borderWidth: 1,
+        borderColor: '#1a1918',
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: 'rgb(136,136,136)', font: { size: 9 }, boxWidth: 10, padding: 6,
+            generateLabels: chart => {
+              const meta = chart.getDatasetMeta(0);
+              return chart.data.labels.map((label, i) => ({
+                text: label.replace('claude-', '').slice(0, 22) + ' ' + ((byModel[i].total_tokens / totalTok) * 100).toFixed(0) + '%',
+                fillStyle: palette[i % palette.length],
+                hidden: meta.data[i]?.hidden,
+                index: i,
+              }));
+            },
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const r = byModel[ctx.dataIndex];
+              const pct = ((r.total_tokens / totalTok) * 100).toFixed(1);
+              return fmt(r.total_tokens) + ' tokens (' + pct + '%)';
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 async function load() {
   const project = $('#f-project').value.trim();
   const from = $('#f-from').value;

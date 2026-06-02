@@ -1024,6 +1024,8 @@ function renderCharts(sparkline, byModel) {
               return chart.data.labels.map((label, i) => ({
                 text: label.replace('claude-', '').slice(0, 22) + ' ' + ((byModel[i].total_tokens / totalTok) * 100).toFixed(0) + '%',
                 fillStyle: palette[i % palette.length],
+                fontColor: 'rgb(136,136,136)',
+                color: 'rgb(136,136,136)',
                 hidden: meta.data[i]?.hidden,
                 index: i,
               }));

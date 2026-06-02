@@ -1,10 +1,9 @@
 """Imputed-cost computation from token counts using a static price table.
 
 The prices.json file is hand-maintained at ~/.claude/usage/prices.json. Prices
-are USD per 1M tokens. We treat all cache_creation_tokens as 5-minute ephemeral
-unless we can later distinguish 1h (the JSONL includes a sub-breakdown but the
-SQLite schema collapses them). This slightly under-bills 1h cache writes; the
-parser could be extended to split them later if precision matters.
+are USD per 1M tokens. Cache creation tokens are split into 1h and 5m ephemeral
+tiers using cache_creation_1h_tokens (stored by the parser from the JSONL
+sub-breakdown). Rows without that field (older DB entries) fall back to 5m pricing.
 """
 from __future__ import annotations
 
@@ -56,7 +55,7 @@ def impute_cost(row: dict, prices: dict) -> Cost:
     M = 1_000_000.0
     cc_total = row.get("cache_creation_tokens", 0) or 0
     cc_1h = row.get("cache_creation_1h_tokens", 0) or 0
-    cc_5m = cc_total - cc_1h
+    cc_5m = max(0, cc_total - cc_1h)
     return Cost(
         input_usd=(row.get("input_tokens", 0) or 0) * p.get("input", 0) / M,
         output_usd=(row.get("output_tokens", 0) or 0) * p.get("output", 0) / M,

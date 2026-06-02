@@ -552,7 +552,7 @@ async function processFile(p, stats) {
         model: model,
         input_tokens: usage.input_tokens || 0,
         cache_creation_tokens: usage.cache_creation_input_tokens || 0,
-        cache_creation_1h_tokens: usage.cache_creation_1h_input_tokens || 0,
+        cache_creation_1h_tokens: usage.cache_creation?.ephemeral_1h_input_tokens || 0,
         cache_read_tokens: usage.cache_read_input_tokens || 0,
         output_tokens: usage.output_tokens || 0,
         service_tier: usage.service_tier || null,

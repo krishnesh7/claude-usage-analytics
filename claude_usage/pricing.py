@@ -64,6 +64,60 @@ def impute_cost(row: dict, prices: dict) -> Cost:
     )
 
 
+COST_MODES: dict[str, dict[str, float]] = {
+    "api":          {"cache_write": 1.00, "cache_read": 1.00},
+    "conservative": {"cache_write": 0.15, "cache_read": 0.05},
+    "subscription": {"cache_write": 0.08, "cache_read": 0.01},
+}
+
+
+def impute_cost_all_modes(row: dict, prices: dict) -> dict[str, Cost]:
+    """Return Cost for all 3 modes from one token row.
+
+    Input/output tokens are always at full API rate. Only cache tokens are
+    discounted — by the per-mode multipliers in COST_MODES.
+    """
+    p = price_for(row.get("model"), prices)
+    M = 1_000_000.0
+    cc_total = row.get("cache_creation_tokens", 0) or 0
+    cc_1h = row.get("cache_creation_1h_tokens", 0) or 0
+    cc_5m = max(0, cc_total - cc_1h)
+    input_usd = (row.get("input_tokens", 0) or 0) * p.get("input", 0) / M
+    output_usd = (row.get("output_tokens", 0) or 0) * p.get("output", 0) / M
+    cr_tokens = row.get("cache_read_tokens", 0) or 0
+
+    result: dict[str, Cost] = {}
+    for mode, mults in COST_MODES.items():
+        cw = mults["cache_write"]
+        cr_m = mults["cache_read"]
+        result[mode] = Cost(
+            input_usd=input_usd,
+            output_usd=output_usd,
+            cache_write_usd=(cc_5m * p.get("cache_write_5m", 0) * cw
+                             + cc_1h * p.get("cache_write_1h", 0) * cw) / M,
+            cache_read_usd=cr_tokens * p.get("cache_read", 0) * cr_m / M,
+        )
+    return result
+
+
+def total_cost_all_modes(per_model_rows: list[dict], prices: dict | None = None) -> dict[str, Cost]:
+    """Sum impute_cost_all_modes across a list of per-model rows."""
+    if prices is None:
+        prices = load_prices()
+    acc = {mode: Cost(0.0, 0.0, 0.0, 0.0) for mode in COST_MODES}
+    for r in per_model_rows:
+        costs = impute_cost_all_modes(r, prices)
+        for mode in COST_MODES:
+            c = costs[mode]
+            acc[mode] = Cost(
+                input_usd=acc[mode].input_usd + c.input_usd,
+                output_usd=acc[mode].output_usd + c.output_usd,
+                cache_write_usd=acc[mode].cache_write_usd + c.cache_write_usd,
+                cache_read_usd=acc[mode].cache_read_usd + c.cache_read_usd,
+            )
+    return acc
+
+
 def total_cost(per_model_rows: list[dict], prices: dict | None = None) -> Cost:
     """Sum imputed cost across rows that each carry a 'model' field plus token columns."""
     if prices is None:

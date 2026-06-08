@@ -129,9 +129,9 @@ def _collapse_project_rows(by_project: list[dict], grand_total: int) -> list[dic
             "pct_of_total": (100.0 * total_tok / grand_total) if grand_total else 0.0,
             "cache_hit_rate": cache_hit,
             "cost": {"total_usd": total_cost},
-            "cost_api": total_cost_api,
-            "cost_conservative": total_cost_conservative,
-            "cost_subscription": total_cost_subscription,
+            "cost_api": round(total_cost_api, 4),
+            "cost_conservative": round(total_cost_conservative, 4),
+            "cost_subscription": round(total_cost_subscription, 4),
         }
         kept.append(ops)
 
@@ -388,7 +388,7 @@ def _build_takes(by_stage, by_project, grand_total, grand_cost) -> list[dict[str
         cls = "good" if pct < 0.5 else "warn" if pct < 2.0 else "bad"
         takes.append({
             "fig": f"{pct:.2f}%",
-            "txt": f"<b>tracker overhead</b> is {pct:.2f}% of total tokens (target <0.5%)",
+            "txt": f"<b>tracker overhead</b> is {pct:.2f}% of total tokens (target &lt;0.5%)",
             "cls": cls,
         })
 
@@ -415,7 +415,7 @@ def _build_takes(by_stage, by_project, grand_total, grand_cost) -> list[dict[str
     if grand_cost > 100:
         takes.append({
             "fig": f"${grand_cost:.0f}",
-            "txt": f"imputed API cost is <b>${grand_cost:.2f}</b> — strong ROI versus Pro plan if >$20/$100",
+            "txt": f"imputed API cost is <b>${grand_cost:.2f}</b> — strong ROI versus Pro plan if &gt;$20/$100",
             "cls": "good",
         })
 

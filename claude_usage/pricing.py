@@ -7,7 +7,10 @@ sub-breakdown). Rows without that field (older DB entries) fall back to 5m prici
 """
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -150,6 +153,8 @@ def _map_litellm_to_schema(raw: dict) -> dict:
     ]
     result: dict = {}
     for name, info in raw.items():
+        if not isinstance(info, dict):
+            continue
         if info.get("litellm_provider") != "anthropic":
             continue
         if not all(k in info and info[k] is not None for k in required):
@@ -190,8 +195,15 @@ def _write_prices_json(path: Path, new_models: dict) -> tuple[int, str]:
         "models": models,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as tmp:
+            json.dump(data, tmp, indent=2)
+        os.replace(tmp_name, path)
+    except Exception:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
     return len(new_models), last_fetched
 
 

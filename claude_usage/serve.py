@@ -68,6 +68,8 @@ def make_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _start_loop() -> None:
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, pricing_mod.ensure_prices)
         app.state.parse_task = asyncio.create_task(_auto_parse_loop(app.state.parse_state))
 
     @app.on_event("shutdown")
@@ -84,6 +86,14 @@ def make_app() -> FastAPI:
             "interval_sec": AUTO_PARSE_SEC,
             **app.state.parse_state,
         })
+
+    @app.get("/api/prices/refresh")
+    def api_prices_refresh() -> JSONResponse:
+        try:
+            count, last_fetched = pricing_mod.refresh_prices()
+            return JSONResponse({"ok": True, "last_fetched": last_fetched, "model_count": count})
+        except Exception as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
     @app.get("/")
     def index() -> FileResponse:

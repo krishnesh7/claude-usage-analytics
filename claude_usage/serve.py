@@ -186,7 +186,7 @@ def make_app() -> FastAPI:
                 per_turns = [dict(t) for t in c.execute(
                     """
                     SELECT t.model, t.input_tokens, t.cache_creation_tokens,
-                           t.cache_read_tokens, t.output_tokens
+                           t.cache_creation_1h_tokens, t.cache_read_tokens, t.output_tokens
                     FROM turns t JOIN sessions s ON s.session_id = t.session_id
                     LEFT JOIN session_stage ss ON ss.session_id = s.session_id
                     WHERE COALESCE(s.project_name, s.project_path) = COALESCE(?, ?)

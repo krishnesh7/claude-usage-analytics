@@ -68,7 +68,7 @@ def make_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _start_loop() -> None:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.run_in_executor(None, pricing_mod.ensure_prices)
         app.state.parse_task = asyncio.create_task(_auto_parse_loop(app.state.parse_state))
 

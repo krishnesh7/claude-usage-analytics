@@ -653,12 +653,16 @@ async function toggleBreakdown(parentTr, dim, key, colspan) {
         { text: label, title: p.project_path || '' },
         p.sessions, p.turns,
         fmt(p.total_tokens),
-        '$' + (p.cost?.total_usd ?? 0).toFixed(2),
+        { text: '$' + (p.cost_subscription ?? p.cost?.total_usd ?? 0).toFixed(2),
+          costApi: p.cost_api ?? p.cost?.total_usd ?? 0,
+          costConservative: p.cost_conservative ?? p.cost?.total_usd ?? 0,
+          costSubscription: p.cost_subscription ?? p.cost?.total_usd ?? 0 },
         { text: (p.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
       ]));
     }
     inner.appendChild(ibody);
     td.appendChild(inner);
+    renderCosts(activeCostMode);
   } catch(e) {
     td.textContent = 'error: ' + e.message;
   }
@@ -673,10 +677,12 @@ function _sessionStats(sessions) {
   const tokens = sessions.reduce((s, r) => s + (r.total_tokens || (
     (r.input_tokens || 0) + (r.cache_creation_tokens || 0) + (r.cache_read_tokens || 0) + (r.output_tokens || 0)
   )), 0);
-  const cost = sessions.reduce((s, r) => s + (r.cost?.total_usd ?? 0), 0);
+  const cost = sessions.reduce((s, r) => s + (r.cost_subscription ?? r.cost?.total_usd ?? 0), 0);
+  const costApi = sessions.reduce((s, r) => s + (r.cost_api ?? r.cost?.total_usd ?? 0), 0);
+  const costConservative = sessions.reduce((s, r) => s + (r.cost_conservative ?? r.cost?.total_usd ?? 0), 0);
   const cacheRead = sessions.reduce((s, r) => s + (r.cache_read_tokens || 0), 0);
   const cacheHit = tokens > 0 ? cacheRead / tokens * 100 : 0;
-  return { count, tokens, cost, cacheHit };
+  return { count, tokens, cost, costApi, costConservative, cacheHit };
 }
 
 function renderKindPanel(label, allSessions) {
@@ -702,11 +708,11 @@ function renderKindPanel(label, allSessions) {
       card.appendChild(empty);
     } else {
       const st = _sessionStats(kindSessions);
-      for (const [statLabel, val] of [
-        ['sessions', st.count],
-        ['tokens', fmt(st.tokens)],
-        ['cost', '$' + st.cost.toFixed(3)],
-        ['cache hit', st.cacheHit.toFixed(1) + '%'],
+      for (const [statLabel, val, costMeta] of [
+        ['sessions', st.count, null],
+        ['tokens', fmt(st.tokens), null],
+        ['cost', '$' + st.cost.toFixed(3), { api: st.costApi, conservative: st.costConservative, subscription: st.cost }],
+        ['cache hit', st.cacheHit.toFixed(1) + '%', null],
       ]) {
         const row = document.createElement('div');
         row.className = 'kc-stat';
@@ -714,6 +720,12 @@ function renderKindPanel(label, allSessions) {
         kEl.textContent = statLabel;
         const vEl = document.createElement('span');
         vEl.className = 'v';
+        if (costMeta) {
+          vEl.dataset.costApi = costMeta.api.toFixed(4);
+          vEl.dataset.costConservative = costMeta.conservative.toFixed(4);
+          vEl.dataset.costSubscription = costMeta.subscription.toFixed(4);
+          vEl.dataset.costPrec = '3';
+        }
         vEl.textContent = val;
         row.appendChild(kEl);
         row.appendChild(vEl);
@@ -733,6 +745,7 @@ function renderKindPanel(label, allSessions) {
   $('#panel-overview').style.display = 'none';
   $('#panel-kind').style.display = 'block';
   $('#panel-sessions').style.display = 'none';
+  renderCosts(activeCostMode);
 }
 
 function drillIntoKind(kindLabel, kindSessions) {
@@ -1114,6 +1127,8 @@ function setCostMode(mode) {
   document.querySelectorAll('.cost-mode-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.mode === mode)
   );
+  const tip = $('#cost-mode-tip');
+  if (tip) tip.textContent = COST_MODE_TIPS[mode] || '';
   renderCosts(mode);
 }
 
@@ -1173,6 +1188,7 @@ async function load() {
       refreshBtn.style.cssText = 'background:none;border:none;color:var(--blue);cursor:pointer;font:inherit;font-size:11px;padding:0;margin-left:4px;';
       refreshBtn.textContent = '[refresh]';
       refreshBtn.onclick = async () => {
+        if (refreshBtn.textContent !== '[refresh]') return;
         refreshBtn.textContent = '[refreshing…]';
         try {
           const r = await (await fetch('/api/prices/refresh')).json();

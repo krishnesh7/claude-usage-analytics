@@ -26,6 +26,7 @@
   .controls button:hover { background: rgba(255,255,255,0.08); }
   .preset-btn { cursor: pointer; }
   .preset-btn.active { border-color: var(--blue); color: var(--blue); }
+  #cost-mode-tip { padding: 2px 14px 4px; background: var(--tb); color: var(--dim); font-size: 10px; border-bottom: 1px solid var(--outline); min-height: 18px; }
   .date-err { border-color: var(--red) !important; }
   .hero { font-size: 44px; font-weight: 700; line-height: 1; margin: 8px 0 4px; }
   .hero .sub { font-size: 13px; color: var(--dim); margin-left: 10px; font-weight: 400; }
@@ -145,6 +146,11 @@
       <button class="preset-btn" data-preset="30d">30d</button>
       <button class="preset-btn" data-preset="all">all</button>
     </span>
+    <span id="cost-mode-btns" style="border-left:1px solid var(--outline);padding-left:14px;margin-left:2px;">
+      <button class="preset-btn cost-mode-btn" data-mode="api">API</button>
+      <button class="preset-btn cost-mode-btn" data-mode="conservative">Conservative</button>
+      <button class="preset-btn cost-mode-btn active" data-mode="subscription">Subscription</button>
+    </span>
     <label>from <input type="date" id="f-from" style="width:120px"></label>
     <label>to <input type="date" id="f-to" style="width:120px"></label>
     <label>kind
@@ -157,6 +163,7 @@
     </label>
     <button id="refresh">↺ refresh</button>
   </div>
+  <div id="cost-mode-tip"></div>
   <div class="term-body">
 
     <!-- Overview panel -->
@@ -282,11 +289,17 @@ function renderKpiCards(totals, prior) {
   const wrap = $('#kpi-cards');
   clearKids(wrap);
   const pt = prior || {};
+  const costSub = totals.cost_subscription ?? totals.cost?.total_usd ?? 0;
   const cards = [
     {
       label: 'imputed cost',
-      value: '$' + (totals.cost?.total_usd ?? 0).toFixed(2),
-      delta: prior != null ? mkDelta(totals.cost?.total_usd ?? 0, pt.cost?.total_usd ?? 0, false, v => '$' + Math.abs(v).toFixed(2)) : null,
+      value: '$' + costSub.toFixed(2),
+      costApi: totals.cost_api ?? totals.cost?.total_usd ?? 0,
+      costConservative: totals.cost_conservative ?? totals.cost?.total_usd ?? 0,
+      costSubscription: costSub,
+      delta: prior != null
+        ? mkDelta(costSub, pt.cost_subscription ?? pt.cost?.total_usd ?? 0, false, v => '$' + Math.abs(v).toFixed(2))
+        : null,
     },
     {
       label: 'sessions',
@@ -310,7 +323,19 @@ function renderKpiCards(totals, prior) {
     const card = document.createElement('div');
     card.className = 'kpi-card';
     card.appendChild(mkEl('div', c.label, 'kpi-label'));
-    const valEl = mkEl('div', c.value, 'kpi-value');
+    const valEl = document.createElement('div');
+    valEl.className = 'kpi-value';
+    if (c.costApi != null) {
+      const amtSpan = document.createElement('span');
+      amtSpan.dataset.costApi = (+c.costApi).toFixed(4);
+      amtSpan.dataset.costConservative = (+c.costConservative).toFixed(4);
+      amtSpan.dataset.costSubscription = (+c.costSubscription).toFixed(4);
+      amtSpan.dataset.costPrec = '2';
+      amtSpan.textContent = c.value;
+      valEl.appendChild(amtSpan);
+    } else {
+      valEl.textContent = c.value;
+    }
     if (c.delta) valEl.appendChild(c.delta);
     card.appendChild(valEl);
     wrap.appendChild(card);
@@ -398,6 +423,12 @@ function mkRow(cells, rowCls) {
       td.textContent = String(c.text ?? '');
       if (c.cls) td.className = c.cls;
       if (c.title) td.title = c.title;
+      if (c.costApi != null) {
+        td.dataset.costApi = c.costApi;
+        td.dataset.costConservative = c.costConservative;
+        td.dataset.costSubscription = c.costSubscription;
+        td.dataset.costPrec = c.costPrec ?? '2';
+      }
     } else {
       td.textContent = String(c ?? '');
     }
@@ -434,7 +465,10 @@ function renderStageTable(rows) {
     const tr = mkRow([
       r.stage, r.sessions, r.turns,
       fmt(totalTokens),
-      '$' + (r.cost?.total_usd ?? 0).toFixed(2),
+      { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
+        costApi: r.cost_api ?? r.cost?.total_usd ?? 0,
+        costConservative: r.cost_conservative ?? r.cost?.total_usd ?? 0,
+        costSubscription: r.cost_subscription ?? r.cost?.total_usd ?? 0 },
       fmtCacheHit(r.cache_hit_rate),
       { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
     ], rowCls);
@@ -455,7 +489,7 @@ function renderProjectTable(rows, priorRows) {
   if (priorRows) {
     for (const r of priorRows) {
       const k = r.project_name || r.display_name || r.project_path;
-      priorByKey[k] = r.cost?.total_usd ?? 0;
+      priorByKey[k] = r.cost_subscription ?? r.cost?.total_usd ?? 0;
     }
   }
   rows = applySort('t-project', rows);
@@ -480,7 +514,7 @@ function renderProjectTable(rows, priorRows) {
     if (priorCost === null) {
       deltaCell = { text: '—', cls: 'pct' };
     } else {
-      const delta = (r.cost?.total_usd ?? 0) - priorCost;
+      const delta = (r.cost_subscription ?? r.cost?.total_usd ?? 0) - priorCost;
       const sign = delta >= 0 ? '+' : '';
       const cls = delta > 0 ? 'pct red' : delta < 0 ? 'pct ok' : 'pct';
       deltaCell = { text: sign + '$' + Math.abs(delta).toFixed(2), cls };
@@ -490,7 +524,10 @@ function renderProjectTable(rows, priorRows) {
       { text: label, title: tooltip },
       r.sessions, r.turns,
       fmt(r.total_tokens),
-      '$' + (r.cost?.total_usd ?? 0).toFixed(2),
+      { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
+        costApi: r.cost_api ?? r.cost?.total_usd ?? 0,
+        costConservative: r.cost_conservative ?? r.cost?.total_usd ?? 0,
+        costSubscription: r.cost_subscription ?? r.cost?.total_usd ?? 0 },
       fmtCacheHit(r.cache_hit_rate),
       '',
       deltaCell,
@@ -527,7 +564,10 @@ function renderModelTable(rows) {
       fmt(r.input_tokens),
       fmt(r.cache_read_tokens),
       fmt(r.output_tokens),
-      '$' + (r.cost?.total_usd ?? 0).toFixed(2),
+      { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
+        costApi: r.cost_api ?? r.cost?.total_usd ?? 0,
+        costConservative: r.cost_conservative ?? r.cost?.total_usd ?? 0,
+        costSubscription: r.cost_subscription ?? r.cost?.total_usd ?? 0 },
       fmtCacheHit(r.cache_hit_rate),
     ]));
   }
@@ -734,7 +774,11 @@ function renderSessions(sessions) {
       { text: stage, title: stage },
       s.turns,
       fmt(s.total_tokens),
-      '$' + (s.cost?.total_usd ?? 0).toFixed(3),
+      { text: '$' + (s.cost_subscription ?? s.cost?.total_usd ?? 0).toFixed(3),
+        costApi: s.cost_api ?? s.cost?.total_usd ?? 0,
+        costConservative: s.cost_conservative ?? s.cost?.total_usd ?? 0,
+        costSubscription: s.cost_subscription ?? s.cost?.total_usd ?? 0,
+        costPrec: '3' },
       fmt(s.cache_read_tokens),
       '',
     ]);
@@ -764,6 +808,7 @@ function renderSessions(sessions) {
     });
     tbody.appendChild(tr);
   }
+  renderCosts(activeCostMode);
 }
 
 function renderAttributionPanel(rows) {
@@ -842,7 +887,7 @@ let exactUntil = null;
 
 function applyPreset(p) {
   activePreset = p;
-  document.querySelectorAll('.preset-btn').forEach(b =>
+  document.querySelectorAll('.preset-btn:not(.cost-mode-btn)').forEach(b =>
     b.classList.toggle('active', b.dataset.preset === p)
   );
   const now = new Date();
@@ -1046,6 +1091,32 @@ function renderCharts(sparkline, byModel) {
   });
 }
 
+// ── Cost mode ──────────────────────────────────────────────────────────
+const COST_MODE_TIPS = {
+  api: 'Full published API rates',
+  conservative: 'Cache tokens at 15% of API rate',
+  subscription: 'Approximates Claude Code subscription billing',
+};
+let activeCostMode = localStorage.getItem('cu-cost-mode') || 'subscription';
+
+function renderCosts(mode) {
+  const key = 'cost' + mode.charAt(0).toUpperCase() + mode.slice(1);
+  document.querySelectorAll('[data-cost-subscription]').forEach(el => {
+    const val = parseFloat(el.dataset[key] || '0');
+    const prec = parseInt(el.dataset.costPrec || '2');
+    el.textContent = '$' + val.toFixed(prec);
+  });
+}
+
+function setCostMode(mode) {
+  activeCostMode = mode;
+  localStorage.setItem('cu-cost-mode', mode);
+  document.querySelectorAll('.cost-mode-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === mode)
+  );
+  renderCosts(mode);
+}
+
 async function load() {
   const project = $('#f-project').value.trim();
   const from = $('#f-from').value;
@@ -1087,7 +1158,34 @@ async function load() {
     renderSkillsTable(d.top_skills || []);
     $('#live-text').textContent = 'live';
     $('#live-dot').classList.remove('stale');
-    $('#footer').textContent = 'updated ' + new Date().toLocaleTimeString() + ' · auto-refresh 30s · click project row to drill into sessions';
+    renderCosts(activeCostMode);
+    $('#cost-mode-tip').textContent = COST_MODE_TIPS[activeCostMode] || '';
+
+    const footer = $('#footer');
+    clearKids(footer);
+    footer.appendChild(document.createTextNode(
+      'updated ' + new Date().toLocaleTimeString() + ' · auto-refresh 30s · click project row to drill into sessions'
+    ));
+    if (d.prices_last_fetched) {
+      const ageDays = Math.floor((Date.now() - new Date(d.prices_last_fetched).getTime()) / 86400000);
+      const ageText = ageDays === 0 ? 'today' : ageDays + ' day' + (ageDays !== 1 ? 's' : '') + ' ago';
+      const refreshBtn = document.createElement('button');
+      refreshBtn.style.cssText = 'background:none;border:none;color:var(--blue);cursor:pointer;font:inherit;font-size:11px;padding:0;margin-left:4px;';
+      refreshBtn.textContent = '[refresh]';
+      refreshBtn.onclick = async () => {
+        refreshBtn.textContent = '[refreshing…]';
+        try {
+          const r = await (await fetch('/api/prices/refresh')).json();
+          refreshBtn.textContent = r.ok ? '[refreshed!]' : '[failed]';
+        } catch { refreshBtn.textContent = '[failed]'; }
+        setTimeout(() => { refreshBtn.textContent = '[refresh]'; }, 2000);
+      };
+      const pricesPart = document.createElement('span');
+      pricesPart.style.marginLeft = '16px';
+      pricesPart.appendChild(document.createTextNode(' · Prices: ' + ageText + ' '));
+      pricesPart.appendChild(refreshBtn);
+      footer.appendChild(pricesPart);
+    }
   } catch (e) {
     $('#live-text').textContent = 'stale';
     $('#live-dot').classList.add('stale');
@@ -1111,24 +1209,28 @@ enableSort('t-model', {
 
 $('#refresh').addEventListener('click', load);
 $('#f-project').addEventListener('change', load);
-document.querySelectorAll('.preset-btn').forEach(b =>
+document.querySelectorAll('.preset-btn:not(.cost-mode-btn)').forEach(b =>
   b.addEventListener('click', () => applyPreset(b.dataset.preset))
 );
 ['blur', 'keydown'].forEach(evt => {
   $('#f-from').addEventListener(evt, e => {
     if (evt === 'keydown' && e.key !== 'Enter') return;
     activePreset = null;
-    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.preset-btn:not(.cost-mode-btn)').forEach(b => b.classList.remove('active'));
     if (validateDateRange()) load();
   });
   $('#f-to').addEventListener(evt, e => {
     if (evt === 'keydown' && e.key !== 'Enter') return;
     activePreset = null;
-    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.preset-btn:not(.cost-mode-btn)').forEach(b => b.classList.remove('active'));
     if (validateDateRange()) load();
   });
 });
 $('#f-kind') && $('#f-kind').addEventListener('change', load);
+document.querySelectorAll('.cost-mode-btn').forEach(b =>
+  b.addEventListener('click', () => setCostMode(b.dataset.mode))
+);
+setCostMode(activeCostMode);
 applyPreset('7d');
 setInterval(load, 30000);
 renderBreadcrumb([{ label: '~ overview' }]);

@@ -102,6 +102,9 @@ def _collapse_project_rows(by_project: list[dict], grand_total: int) -> list[dic
 
         total_tok = sum(r.get("total_tokens", 0) or 0 for r in ops_rows)
         total_cost = sum((r.get("cost") or {}).get("total_usd", 0) for r in ops_rows)
+        total_cost_api = sum(r.get("cost_api", 0) for r in ops_rows)
+        total_cost_conservative = sum(r.get("cost_conservative", 0) for r in ops_rows)
+        total_cost_subscription = sum(r.get("cost_subscription", 0) for r in ops_rows)
         sessions = sum(r.get("sessions", 0) or 0 for r in ops_rows)
         turns = sum(r.get("turns", 0) or 0 for r in ops_rows)
 
@@ -126,6 +129,9 @@ def _collapse_project_rows(by_project: list[dict], grand_total: int) -> list[dic
             "pct_of_total": (100.0 * total_tok / grand_total) if grand_total else 0.0,
             "cache_hit_rate": cache_hit,
             "cost": {"total_usd": total_cost},
+            "cost_api": total_cost_api,
+            "cost_conservative": total_cost_conservative,
+            "cost_subscription": total_cost_subscription,
         }
         kept.append(ops)
 
@@ -215,7 +221,11 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
     by_stage = dbmod.totals_by_stage(project=project, since=since_dt, kind=kind, until=until_dt)
     for r in by_stage:
         per_model = dbmod.turns_by_model_for_stage(r["stage"], project=project, since=since_dt, until=until_dt)
-        r["cost"] = pricing_mod.cost_dict(pricing_mod.total_cost(per_model, prices))
+        all_costs = pricing_mod.total_cost_all_modes(per_model, prices)
+        r["cost"] = pricing_mod.cost_dict(all_costs["subscription"])
+        r["cost_api"] = round(all_costs["api"].total_usd, 4)
+        r["cost_conservative"] = round(all_costs["conservative"].total_usd, 4)
+        r["cost_subscription"] = round(all_costs["subscription"].total_usd, 4)
         for k in ("input_tokens", "cache_creation_tokens", "cache_read_tokens", "output_tokens"):
             r[k + "_h"] = _fmt(r[k])
         r["total_tokens"] = _total_tokens(r)
@@ -233,7 +243,11 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
         for r in by_project[:30]:
             lookup_key = r.get("project_name") or r.get("project_path", "")
             per_model = dbmod.turns_by_model(project=lookup_key, since=since_dt, until=until_dt)
-            r["cost"] = pricing_mod.cost_dict(pricing_mod.total_cost(per_model, prices))
+            all_costs = pricing_mod.total_cost_all_modes(per_model, prices)
+            r["cost"] = pricing_mod.cost_dict(all_costs["subscription"])
+            r["cost_api"] = round(all_costs["api"].total_usd, 4)
+            r["cost_conservative"] = round(all_costs["conservative"].total_usd, 4)
+            r["cost_subscription"] = round(all_costs["subscription"].total_usd, 4)
             for k in ("input_tokens", "cache_creation_tokens", "cache_read_tokens", "output_tokens"):
                 r[k + "_h"] = _fmt(r[k])
             r["total_tokens"] = _total_tokens(r)
@@ -271,7 +285,11 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
         single = [{"model": r["model"], **{k: r[k] for k in (
             "input_tokens", "cache_creation_tokens", "cache_creation_1h_tokens", "cache_read_tokens", "output_tokens"
         )}}]
-        r["cost"] = pricing_mod.cost_dict(pricing_mod.total_cost(single, prices))
+        all_costs = pricing_mod.total_cost_all_modes(single, prices)
+        r["cost"] = pricing_mod.cost_dict(all_costs["subscription"])
+        r["cost_api"] = round(all_costs["api"].total_usd, 4)
+        r["cost_conservative"] = round(all_costs["conservative"].total_usd, 4)
+        r["cost_subscription"] = round(all_costs["subscription"].total_usd, 4)
         r["cache_hit_rate"] = _cache_hit_rate(r)
     by_model_list.sort(key=lambda x: x["total_tokens"], reverse=True)
 
@@ -286,13 +304,20 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
 
     # Compute daily cost: group by day across models, then price each day.
     cost_by_day_rows = dbmod.daily_cost_by_day(since=since_dt, until=until_dt, project=project, kind=kind)
-    day_cost: dict[str, float] = {}
+    day_costs: dict[str, dict[str, float]] = {}
     for r in cost_by_day_rows:
         if r["day"]:
-            c = pricing_mod.total_cost([r], prices)
-            day_cost[r["day"]] = day_cost.get(r["day"], 0.0) + c.total_usd
+            all_c = pricing_mod.total_cost_all_modes([r], prices)
+            d = day_costs.setdefault(r["day"], {"api": 0.0, "conservative": 0.0, "subscription": 0.0})
+            d["api"] += all_c["api"].total_usd
+            d["conservative"] += all_c["conservative"].total_usd
+            d["subscription"] += all_c["subscription"].total_usd
     for row in sparkline:
-        row["cost_usd"] = round(day_cost.get(row["day"], 0.0), 4)
+        d = day_costs.get(row["day"], {"api": 0.0, "conservative": 0.0, "subscription": 0.0})
+        row["cost_usd"] = round(d["subscription"], 4)
+        row["cost_api"] = round(d["api"], 4)
+        row["cost_conservative"] = round(d["conservative"], 4)
+        row["cost_subscription"] = round(d["subscription"], 4)
 
     top_skills = dbmod.top_skills(project=project, since=since_dt, limit=15, until=until_dt)
 
@@ -307,7 +332,11 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
     cache_hit = (total_cr / cache_total) if cache_total else None
 
     per_model = dbmod.turns_by_model(project=project, since=since_dt, until=until_dt)
-    grand_cost_obj = pricing_mod.cost_dict(pricing_mod.total_cost(per_model, prices))
+    all_grand = pricing_mod.total_cost_all_modes(per_model, prices)
+    grand_cost_obj = pricing_mod.cost_dict(all_grand["subscription"])
+    grand_cost_api = round(all_grand["api"].total_usd, 4)
+    grand_cost_conservative = round(all_grand["conservative"].total_usd, 4)
+    grand_cost_subscription = round(all_grand["subscription"].total_usd, 4)
 
     takes = _build_takes(by_stage, by_project, grand_total, grand_cost_obj["total_usd"])
 
@@ -335,11 +364,15 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
             "output_tokens_h": _fmt(total_out),
             "total_tokens_h": _fmt(grand_total),
             "cost": grand_cost_obj,
+            "cost_api": grand_cost_api,
+            "cost_conservative": grand_cost_conservative,
+            "cost_subscription": grand_cost_subscription,
             "cache_hit_rate": cache_hit,
             "since_label": since,
             "last_session_at": None,
         },
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "prices_last_fetched": pricing_mod.get_prices_meta().get("last_fetched"),
     }
 
 
@@ -355,7 +388,7 @@ def _build_takes(by_stage, by_project, grand_total, grand_cost) -> list[dict[str
         cls = "good" if pct < 0.5 else "warn" if pct < 2.0 else "bad"
         takes.append({
             "fig": f"{pct:.2f}%",
-            "txt": f"<b>tracker overhead</b> is {pct:.2f}% of total tokens (target &lt;0.5%)",
+            "txt": f"<b>tracker overhead</b> is {pct:.2f}% of total tokens (target <0.5%)",
             "cls": cls,
         })
 
@@ -382,7 +415,7 @@ def _build_takes(by_stage, by_project, grand_total, grand_cost) -> list[dict[str
     if grand_cost > 100:
         takes.append({
             "fig": f"${grand_cost:.0f}",
-            "txt": f"imputed API cost is <b>${grand_cost:.2f}</b> — strong ROI versus Pro plan if &gt;$20/$100",
+            "txt": f"imputed API cost is <b>${grand_cost:.2f}</b> — strong ROI versus Pro plan if >$20/$100",
             "cls": "good",
         })
 

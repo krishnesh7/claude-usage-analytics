@@ -138,7 +138,11 @@ def make_app() -> FastAPI:
                     "SELECT model, input_tokens, cache_creation_tokens, cache_creation_1h_tokens, cache_read_tokens, output_tokens FROM turns WHERE session_id = ?",
                     (r["session_id"],),
                 )]
-            r["cost"] = pricing_mod.cost_dict(pricing_mod.total_cost(turns, prices))
+            all_costs = pricing_mod.total_cost_all_modes(turns, prices)
+            r["cost"] = pricing_mod.cost_dict(all_costs["subscription"])
+            r["cost_api"] = round(all_costs["api"].total_usd, 4)
+            r["cost_conservative"] = round(all_costs["conservative"].total_usd, 4)
+            r["cost_subscription"] = round(all_costs["subscription"].total_usd, 4)
             r["total_tokens"] = (
                 r["input_tokens"] + r["cache_creation_tokens"]
                 + r["cache_read_tokens"] + r["output_tokens"]
@@ -193,7 +197,11 @@ def make_app() -> FastAPI:
                     """,
                     (r["project_name"], r["project_path"], dim, key, dim, key),
                 )]
-            r["cost"] = pricing_mod.cost_dict(pricing_mod.total_cost(per_turns, prices))
+            all_costs = pricing_mod.total_cost_all_modes(per_turns, prices)
+            r["cost"] = pricing_mod.cost_dict(all_costs["subscription"])
+            r["cost_api"] = round(all_costs["api"].total_usd, 4)
+            r["cost_conservative"] = round(all_costs["conservative"].total_usd, 4)
+            r["cost_subscription"] = round(all_costs["subscription"].total_usd, 4)
             grand_cost += r["cost"]["total_usd"]
         for r in rows:
             r["pct_of_total"] = (

@@ -1,11 +1,12 @@
 {
-  "_comment": "Keyword -> stage rules. Classifier scans the first 3 human messages of a session and picks the stage with the most keyword hits. Ties broken by stage order below. All matching is case-insensitive whole-word.",
+  "_comment": "Keyword -> stage rules. Classifier scans the session's first user message and picks the stage with the most keyword hits. Ties broken by tie_break_order below. Single words match whole-word; multi-word/hyphenated phrases match as case-insensitive substrings. 'explore' is the Q&A/investigation bucket (not a build action); it sits above 'impl' in tie-break so a phrased-as-question bug report still lands in 'impl' only when an impl keyword also hits.",
   "rules": {
-    "requirements": ["spec", "specification", "requirement", "requirements", "user story", "user stories", "prd", "acceptance criteria", "what should", "use case", "use cases"],
-    "design":       ["architecture", "architect", "design", "designing", "diagram", "schema", "data model", "approach", "tradeoff", "trade-off", "wireframe", "mockup"],
-    "test":         ["test", "tests", "testing", "jest", "pytest", "vitest", "coverage", "tdd", "unit test", "integration test", "e2e", "fixture"],
-    "deploy":       ["deploy", "deployment", "ci", "cd", "pipeline", "release", "rollout", "production", "prod", "kubernetes", "k8s", "docker", "helm", "terraform"],
-    "impl":         ["implement", "implementation", "function", "method", "bug", "fix", "refactor", "endpoint", "component", "module", "feature"]
+    "requirements": ["spec", "specification", "requirement", "requirements", "user story", "user stories", "prd", "acceptance criteria", "what should", "use case", "use cases", "i want to build", "want to build", "i want to create", "want to create", "i want to capture", "want to capture", "i want to develop", "want to develop", "building a", "we are building", "i am building", "# project", "new project", "poc", "mvp", "roadmap"],
+    "design":       ["architecture", "architect", "design", "designing", "diagram", "schema", "data model", "approach", "tradeoff", "trade-off", "wireframe", "mockup", "how should", "best way", "best approach", "data flow", "high-level", "system design"],
+    "test":         ["test", "tests", "testing", "jest", "pytest", "vitest", "coverage", "tdd", "unit test", "integration test", "e2e", "fixture", "smoke test", "regression", "assertion", "test case"],
+    "deploy":       ["deploy", "deployment", "ci", "cd", "pipeline", "release", "rollout", "production", "prod", "kubernetes", "k8s", "docker", "helm", "terraform", "git push", "git merge", "push to remote", "in sync with remote", "pull request", "rollback", "is it live", "is this live", "env var", "environment variable"],
+    "explore":      ["how to", "how can", "how do", "can you explain", "explain me", "is it possible", "why is", "why does", "why are", "what is", "what are", "what's the", "is there a way", "can you help me understand", "do you know"],
+    "impl":         ["implement", "implementation", "function", "method", "bug", "fix", "refactor", "endpoint", "component", "module", "feature", "not working", "doesn't work", "isn't working", "not correct", "incorrect", "issue with", "the issue", "broken", "error", "crash", "want to add", "add more", "can we add", "can you add", "can we update", "update the", "add a", "add the", "remove the", "make it"]
   },
-  "tie_break_order": ["test", "deploy", "design", "requirements", "impl"]
+  "tie_break_order": ["test", "deploy", "design", "requirements", "explore", "impl"]
 }

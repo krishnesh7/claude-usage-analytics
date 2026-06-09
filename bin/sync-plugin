@@ -20,4 +20,10 @@ rsync -a --delete "$SRC/hooks/"    "$DST/hooks/"
 rsync -a --delete "$SRC/skills/"   "$DST/skills/"
 cp "$SRC/.claude-plugin/plugin.json" "$DST/plugin.json"
 
+# Deploy parser so the DB schema migration (cache_creation_1h_tokens etc.) stays in sync.
+PARSER_DST="$HOME/.claude/usage/parser"
+mkdir -p "$PARSER_DST"
+cp "$SRC/parser/parse.mjs" "$PARSER_DST/parse.mjs"
+
 echo "Plugin cache synced → $DST"
+echo "Parser deployed     → $PARSER_DST/parse.mjs"

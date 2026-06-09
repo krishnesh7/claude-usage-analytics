@@ -78,12 +78,17 @@ def parse(force: bool, verbose: bool, no_enrich: bool) -> None:
 
 
 @cli.command()
-def classify() -> None:
+@click.option(
+    "--reclassify",
+    is_flag=True,
+    help="Re-evaluate classifier-authored stages (e.g. after editing keywords).",
+)
+def classify(reclassify: bool) -> None:
     """Apply the keyword classifier to any sessions still missing a stage."""
     if not DB_PATH.exists():
         click.echo("ERROR: usage.db missing. Run `cu parse` first.", err=True)
         sys.exit(2)
-    res = classify_mod.classify_all()
+    res = classify_mod.classify_all(reclassify=reclassify)
     click.echo(json.dumps({
         "classified": res.classified,
         "by_stage": res.by_stage,

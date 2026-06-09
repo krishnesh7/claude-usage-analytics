@@ -40,6 +40,10 @@ const STAGE_MAP_PATH = path.join(USAGE_DIR, 'stage_map.json')
 const PROJECTS_PATH = path.join(USAGE_DIR, 'projects.json')
 
 const TRACKER_CMD_RE = /^\s*\/(usage|usage-report|usage-doc|stage|project)\b/
+// Content signatures of the .remember background agents (memory summary /
+// compression / consolidation). They don't start with a slash-command, so
+// TRACKER_CMD_RE misses them. Keep in sync with classify.py _OVERHEAD_MSG_RE.
+const OVERHEAD_MSG_RE = /^\s*(You are summarizing a Claude Code session|Apply maximum non-destructive compression|You are a memory consolidation agent)/i
 const AGENT_LABEL_RE = /^agent-a([a-zA-Z_][\w-]*?)-[0-9a-f]{6,}$/
 // Claude Code worktree convention: <parent-encoded-dir>--claude-worktrees-<branch>
 // or <parent-encoded-dir>-claude-worktrees-<branch>. We strip the worktree
@@ -497,7 +501,7 @@ async function processFile(p, stats) {
     }
   }
 
-  const isOverhead = firstUserMessage && TRACKER_CMD_RE.test(firstUserMessage) ? 1 : 0
+  const isOverhead = firstUserMessage && (TRACKER_CMD_RE.test(firstUserMessage) || OVERHEAD_MSG_RE.test(firstUserMessage)) ? 1 : 0
   const projectPath = decodeProjectPath(info.project)
   // Subagent sessions inherit parent's project_dir for resolution purposes,
   // since the subagent file lives under the parent's project tree.

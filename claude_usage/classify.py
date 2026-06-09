@@ -13,7 +13,12 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
-from .db import connect, get_sessions_missing_stage, upsert_stage
+from .db import (
+    clear_classifier_stages,
+    connect,
+    get_sessions_missing_stage,
+    upsert_stage,
+)
 from .paths import STAGE_KEYWORDS_PATH
 
 
@@ -22,6 +27,24 @@ class ClassifyResult:
     classified: int
     by_stage: dict[str, int]
     skipped_overhead: int
+
+
+# Content signatures of the .remember background agents. These sessions are
+# tracker overhead but don't begin with a slash-command, so the parser's
+# TRACKER_CMD_RE misses them. Keep in sync with parser/parse.mjs OVERHEAD_MSG_RE.
+_OVERHEAD_MSG_RE = re.compile(
+    r"^\s*(?:"
+    r"You are summarizing a Claude Code session"
+    r"|Apply maximum non-destructive compression"
+    r"|You are a memory consolidation agent"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def is_overhead_message(text: str | None) -> bool:
+    """True when the first user message is a memory/tracker background agent."""
+    return bool(text) and _OVERHEAD_MSG_RE.search(text) is not None
 
 
 def load_keywords() -> tuple[dict[str, list[str]], list[str]]:
@@ -68,7 +91,9 @@ def classify_text(text: str, compiled: dict[str, list[re.Pattern]], order: list[
     return tied[0]
 
 
-def classify_all() -> ClassifyResult:
+def classify_all(reclassify: bool = False) -> ClassifyResult:
+    if reclassify:
+        clear_classifier_stages()
     rules, order = load_keywords()
     compiled = _compile_patterns(rules)
     rows = get_sessions_missing_stage()
@@ -79,6 +104,10 @@ def classify_all() -> ClassifyResult:
             skipped += 1
             continue
         text = row.get("first_user_message") or ""
+        if is_overhead_message(text):
+            upsert_stage(row["session_id"], "_tracker_overhead_", "classifier")
+            counts["_tracker_overhead_"] += 1
+            continue
         stage = classify_text(text, compiled, order)
         upsert_stage(row["session_id"], stage, "classifier")
         counts[stage] += 1

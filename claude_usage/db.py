@@ -120,25 +120,47 @@ def totals_by_stage(
     kind: str | None = None,
     until: datetime | None = None,
 ) -> list[dict]:
-    """Aggregate token usage grouped by SDLC stage (across all sessions matching filters).
+    """Aggregate token usage grouped by SDLC stage.
 
-    Sessions with no row in session_stage are bucketed as 'unclassified'.
+    Child/agent sessions inherit their parent's stage so subagent turns count
+    toward the parent's SDLC work. Only root sessions count in `sessions`;
+    overhead sessions are excluded entirely.
     """
+    # Resolve effective stage: own stage for roots, parent's stage for children.
+    # COUNT(sessions) uses only root sessions; token SUMs span the whole tree.
     sql = """
         SELECT
-          COALESCE(ss.stage, 'unclassified') AS stage,
-          COUNT(DISTINCT s.session_id) AS sessions,
+          COALESCE(
+            CASE WHEN s.parent_session_id IS NULL AND s.session_id NOT LIKE '%::agent-%'
+                 THEN own_ss.stage
+                 ELSE par_ss.stage END,
+            'unclassified'
+          ) AS stage,
+          COUNT(DISTINCT CASE
+            WHEN s.parent_session_id IS NULL AND s.session_id NOT LIKE '%::agent-%'
+            THEN s.session_id END) AS sessions,
           COUNT(t.id) AS turns,
           COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
           COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
           COALESCE(SUM(t.cache_read_tokens), 0) AS cache_read_tokens,
           COALESCE(SUM(t.output_tokens), 0) AS output_tokens
         FROM sessions s
-        LEFT JOIN session_stage ss ON ss.session_id = s.session_id
+        LEFT JOIN session_stage own_ss ON own_ss.session_id = s.session_id
+        LEFT JOIN session_stage par_ss ON par_ss.session_id = s.parent_session_id
         LEFT JOIN turns t ON t.session_id = s.session_id
+        WHERE COALESCE(s.is_tracker_overhead, 0) = 0
+          AND COALESCE(own_ss.stage, '') != '_tracker_overhead_'
     """
-    clause, params = _where_clauses(project, since, None, kind=kind, until=until)
-    sql += clause + " GROUP BY COALESCE(ss.stage, 'unclassified') ORDER BY input_tokens + cache_creation_tokens + cache_read_tokens + output_tokens DESC"
+    extra_clause, params = _where_clauses(project, since, None, kind=kind, until=until)
+    extra = extra_clause.lstrip(" WHERE ").strip()
+    if extra:
+        sql += f" AND {extra}"
+    sql = f"""
+        SELECT * FROM ({sql}
+        GROUP BY 1) sub
+        WHERE sub.stage != 'unclassified' OR sub.sessions > 0
+        ORDER BY input_tokens + cache_creation_tokens + cache_read_tokens + output_tokens DESC
+    """
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]
 
@@ -368,11 +390,23 @@ def get_sessions_missing_stage(limit: int | None = None) -> list[dict]:
         FROM sessions s
         LEFT JOIN session_stage ss ON ss.session_id = s.session_id
         WHERE ss.session_id IS NULL
+          AND s.parent_session_id IS NULL
+          AND s.session_id NOT LIKE '%::agent-%'
     """
     if limit:
         sql += f" LIMIT {int(limit)}"
     with connect() as c:
         return [dict(r) for r in c.execute(sql)]
+
+
+def clear_classifier_stages() -> None:
+    """Drop only classifier-authored stage rows so they can be re-evaluated.
+
+    Parser-authored ('overhead_detect') and manual/cwd_map rows are preserved.
+    """
+    with connect() as c:
+        c.execute("DELETE FROM session_stage WHERE source = 'classifier'")
+        c.commit()
 
 
 def upsert_stage(session_id: str, stage: str, source: str) -> None:

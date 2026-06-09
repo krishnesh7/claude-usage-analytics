@@ -71,6 +71,14 @@
   .sparkline-wrap svg { display: block; }
   .spark-label { color: var(--dim); font-size: 11px; }
   .spark-tip { position: absolute; display: none; background: var(--tb); color: var(--fg); border: 1px solid var(--outline); border-radius: 4px; padding: 4px 8px; font-size: 11px; pointer-events: none; z-index: 10; white-space: nowrap; }
+#tt {
+  position: fixed; pointer-events: none; z-index: 100;
+  background: var(--tb); color: var(--fg);
+  border: 1px solid var(--outline); border-radius: 4px;
+  padding: 5px 9px; font-size: 11px; max-width: 260px;
+  line-height: 1.4; display: none; white-space: normal;
+}
+[data-tip] { cursor: default; }
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--fg); }
   th.sortable[data-sort="asc"]::after { content: ' ▲'; color: var(--clay); font-size: 9px; }
@@ -1280,6 +1288,25 @@ setCostMode(activeCostMode);
     if (planNote) planNote.textContent = '  ·  Detected plan: ' + planLabel;
   } catch {}
 })();
+function initTooltips() {
+  const tt = document.createElement('div');
+  tt.id = 'tt';
+  document.body.appendChild(tt);
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-tip]');
+    if (!el) { tt.style.display = 'none'; return; }
+    tt.textContent = el.dataset.tip;
+    tt.style.display = 'block';
+  });
+  document.addEventListener('mousemove', e => {
+    tt.style.left = (e.clientX + 14) + 'px';
+    tt.style.top  = (e.clientY + 14) + 'px';
+  });
+  document.addEventListener('mouseout', e => {
+    if (!e.target.closest('[data-tip]')) tt.style.display = 'none';
+  });
+}
+initTooltips();
 applyPreset('7d');
 setInterval(load, 30000);
 renderBreadcrumb([{ label: '~ overview' }]);

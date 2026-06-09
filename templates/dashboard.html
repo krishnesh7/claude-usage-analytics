@@ -89,6 +89,27 @@
   .session-name { display: block; color: var(--fg); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
   .session-sub-id { color: var(--blue); font-size: 10px; letter-spacing: 0.3px; }
   .hint { color: var(--dim); font-size: 11px; margin: 4px 0 6px; }
+  /* Fluency panel */
+  .fluency-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .fluency-card {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--outline);
+    border-radius: 6px; padding: 14px 16px; min-width: 180px; flex: 1 1 180px; max-width: 240px;
+  }
+  .fluency-name { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; margin-bottom: 8px; }
+  .fluency-badge { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+  .fluency-badge.ok   { color: var(--green); }
+  .fluency-badge.warn { color: var(--yellow); }
+  .fluency-badge.red  { color: var(--red); }
+  .fluency-axis { margin-bottom: 6px; }
+  .fluency-axis-header { display: flex; justify-content: space-between;
+    font-size: 10px; color: var(--dim); margin-bottom: 2px; }
+  .fluency-axis-header .ax-score { font-weight: 600; }
+  .fluency-bar-track { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; }
+  .fluency-bar-fill  { height: 4px; border-radius: 2px; transition: width 0.3s; }
+  .fluency-bar-fill.ok   { background: var(--green); }
+  .fluency-bar-fill.warn { background: var(--yellow); }
+  .fluency-bar-fill.red  { background: var(--red); }
   #panel-sessions { display: none; }
   #panel-kind { display: none; }
   .kind-cards { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
@@ -181,6 +202,12 @@
       <div class="charts-row">
         <div class="chart-panel"><canvas id="chart-trend"></canvas></div>
         <div class="chart-panel"><canvas id="chart-donut"></canvas></div>
+      </div>
+
+      <div id="fluency-panel" style="display:none">
+        <h2>fluency <span class="sub" style="font-size:12px;font-weight:400;color:var(--dim);margin-left:8px">token efficiency by project</span></h2>
+        <p class="hint">Percentile scores within your projects. Higher = more efficient.</p>
+        <div id="fluency-cards" class="fluency-row"></div>
       </div>
 
       <h2 id="h-project">by project</h2>
@@ -505,6 +532,111 @@ function fmtCacheHit(rate) {
   const pct = (rate * 100).toFixed(0) + '%';
   const cls = rate >= 0.85 ? 'pct ok' : rate >= 0.5 ? 'pct warn' : 'pct red';
   return { text: pct, cls };
+}
+
+function computeFluency(byProject, byModel) {
+  if (!byProject || byProject.length < 2) return null;
+
+  const totalModelTokens = (byModel || []).reduce((s, r) => s + (r.total_tokens || 0), 0);
+  const opusTokens = (byModel || [])
+    .filter(r => (r.model || '').toLowerCase().includes('opus'))
+    .reduce((s, r) => s + (r.total_tokens || 0), 0);
+  const globalModelFitRaw = totalModelTokens > 0 ? 1 - (opusTokens / totalModelTokens) : 0.5;
+
+  const projects = byProject.map(r => {
+    const inp = r.input_tokens || 0;
+    const cc  = r.cache_creation_tokens || 0;
+    const cr  = r.cache_read_tokens || 0;
+    const inputSide = inp + cc + cr;
+    const cacheHygiene = inputSide > 0 ? cr / inputSide : 0;
+    const cachePayback = cc > 0 ? Math.min(cr / cc, 1) : (cr > 0 ? 1 : 0);
+    const turns = r.turns || 1;
+    const cost = r.cost?.total_usd ?? r.cost_subscription ?? 0;
+    const costPerTurn = cost / turns;
+    return {
+      key: r.project_name || r.display_name || r.project_path,
+      raw: { cacheHygiene, cachePayback, modelFit: globalModelFitRaw, costEconomy: costPerTurn },
+      r,
+    };
+  });
+
+  function percentileRank(items, key, higherIsBetter) {
+    const vals = items.map(p => p.raw[key]);
+    const sorted = [...vals].sort((a, b) => a - b);
+    return items.map(p => {
+      const rank = sorted.indexOf(p.raw[key]);
+      const pct = Math.round((rank / (sorted.length - 1)) * 100);
+      return higherIsBetter ? pct : 100 - pct;
+    });
+  }
+
+  const hygieneScores = percentileRank(projects, 'cacheHygiene',  true);
+  const paybackScores = percentileRank(projects, 'cachePayback',  true);
+  const modelScores   = percentileRank(projects, 'modelFit',      true);
+  const economyScores = percentileRank(projects, 'costEconomy',   false);
+
+  return projects.map((p, i) => {
+    const axes = [
+      { label: 'Cache Hygiene', score: hygieneScores[i],
+        tip: '% of input-side tokens served from cache. High = you reuse context well instead of re-sending it fresh.' },
+      { label: 'Cache Payback', score: paybackScores[i],
+        tip: 'Ratio of cache reads to cache writes. High = your cached prompts got reused many times; low = cache was written but rarely read back.' },
+      { label: 'Model Fit (global)', score: modelScores[i],
+        tip: 'How much of your token spend used lighter models (Sonnet/Haiku) vs Opus. Scored globally across all projects in v1.' },
+      { label: 'Cost Economy', score: economyScores[i],
+        tip: 'Your cost per turn relative to your other projects. High = efficient spend per interaction.' },
+    ];
+    const composite = Math.round(axes.reduce((s, a) => s + a.score, 0) / axes.length);
+    return { key: p.key, name: p.key, axes, composite, r: p.r };
+  });
+}
+
+function renderFluencyPanel(byProject, byModel) {
+  const panel = $('#fluency-panel');
+  const container = $('#fluency-cards');
+  clearKids(container);
+  const scored = computeFluency(byProject, byModel);
+  if (!scored) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+
+  function scoreCls(s) { return s >= 70 ? 'ok' : s >= 40 ? 'warn' : 'red'; }
+  const shortName = n => !n ? '(unknown)' : n.length > 22 ? n.slice(0, 20) + '…' : n;
+
+  for (const p of scored.slice(0, 6)) {
+    const card = document.createElement('div');
+    card.className = 'fluency-card';
+
+    const nameEl = mkEl('div', shortName(p.name), 'fluency-name');
+    nameEl.title = p.name;
+    card.appendChild(nameEl);
+
+    const badge = mkEl('div', String(p.composite), 'fluency-badge ' + scoreCls(p.composite));
+    badge.dataset.tip = 'Composite of the 4 axes below, as a percentile among your projects. Tells you which projects have the healthiest token usage patterns.';
+    card.appendChild(badge);
+
+    for (const ax of p.axes) {
+      const axDiv = document.createElement('div');
+      axDiv.className = 'fluency-axis';
+      axDiv.dataset.tip = ax.tip;
+
+      const header = document.createElement('div');
+      header.className = 'fluency-axis-header';
+      header.appendChild(mkEl('span', ax.label, 'ax-label'));
+      header.appendChild(mkEl('span', String(ax.score), 'ax-score'));
+      axDiv.appendChild(header);
+
+      const track = document.createElement('div');
+      track.className = 'fluency-bar-track';
+      const fill = document.createElement('div');
+      fill.className = 'fluency-bar-fill ' + scoreCls(ax.score);
+      fill.style.width = ax.score + '%';
+      track.appendChild(fill);
+      axDiv.appendChild(track);
+
+      card.appendChild(axDiv);
+    }
+    container.appendChild(card);
+  }
 }
 
 function renderStageTable(rows) {
@@ -1239,6 +1371,7 @@ async function load() {
     renderStageTable(d.by_stage);
     renderProjectTable(d.by_project, priorData ? priorData.by_project : null);
     renderModelTable(d.by_model);
+    renderFluencyPanel(d.by_project || [], d.by_model || []);
     renderAgentTable(d.by_agent_type);
     renderSkillsTable(d.top_skills || []);
     $('#live-text').textContent = 'live';

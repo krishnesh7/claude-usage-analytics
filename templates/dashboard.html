@@ -1193,7 +1193,8 @@ async function load() {
     $('#live-text').textContent = 'live';
     $('#live-dot').classList.remove('stale');
     renderCosts(activeCostMode);
-    $('#cost-mode-tip').textContent = COST_MODE_TIPS[activeCostMode] || '';
+    const _desc = document.getElementById('cost-mode-desc');
+    if (_desc) _desc.textContent = COST_MODE_TIPS[activeCostMode] || '';
 
     const footer = $('#footer');
     clearKids(footer);

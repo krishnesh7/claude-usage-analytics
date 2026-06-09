@@ -977,8 +977,16 @@ function computePriorRange(from, to) {
 
 let _trendChart = null;
 let _donutChart = null;
+let _lastSparkline = null;
+
+function _sparklineCostField(mode) {
+  if (mode === 'api') return 'cost_api';
+  if (mode === 'conservative') return 'cost_conservative';
+  return 'cost_subscription';
+}
 
 function renderCharts(sparkline, byModel) {
+  _lastSparkline = sparkline;
   // Destroy previous instances to prevent canvas memory leak on re-render
   if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
   if (_donutChart) { _donutChart.destroy(); _donutChart = null; }
@@ -1020,9 +1028,10 @@ function renderCharts(sparkline, byModel) {
     },
   ];
   if (hasCost) {
+    const costField = _sparklineCostField(activeCostMode);
     datasets.push({
       type: 'line', label: 'cost ($)', yAxisID: 'y2',
-      data: sparkline.map(r => r.cost_usd || 0),
+      data: sparkline.map(r => r[costField] ?? r.cost_usd ?? 0),
       borderColor: '#D97757', backgroundColor: 'transparent',
       borderWidth: 1.5, pointRadius: 2, tension: 0.3,
     });
@@ -1040,7 +1049,8 @@ function renderCharts(sparkline, byModel) {
               const r = sparkline[items[0].dataIndex];
               if (!r) return [];
               const lines = ['total: ' + fmt(r.total)];
-              if (r.cost_usd != null) lines.push('cost: $' + r.cost_usd.toFixed(4));
+              const costVal = r[_sparklineCostField(activeCostMode)] ?? r.cost_usd;
+              if (costVal != null) lines.push('cost: $' + costVal.toFixed(4));
               return lines;
             },
           },
@@ -1131,6 +1141,14 @@ function setCostMode(mode) {
   const tip = $('#cost-mode-tip');
   if (tip) tip.textContent = COST_MODE_TIPS[mode] || '';
   renderCosts(mode);
+  if (_trendChart && _lastSparkline) {
+    const costDs = _trendChart.data.datasets.find(d => d.type === 'line');
+    if (costDs) {
+      const field = _sparklineCostField(mode);
+      costDs.data = _lastSparkline.map(r => r[field] ?? r.cost_usd ?? 0);
+      _trendChart.update();
+    }
+  }
 }
 
 async function load() {
@@ -1255,6 +1273,9 @@ setCostMode(activeCostMode);
       b.classList.toggle('hint-match', b.dataset.mode === hint.mode)
     );
     if (!localStorage.getItem('cu-cost-mode')) setCostMode(hint.mode);
+    const planLabel = { api: 'API (pay-per-token)', subscription: 'Subscription', conservative: 'Conservative' }[hint.mode] || hint.mode;
+    const tip = $('#cost-mode-tip');
+    if (tip) tip.textContent = (tip.textContent ? tip.textContent + '  ·  ' : '') + 'Detected plan: ' + planLabel;
   } catch {}
 })();
 applyPreset('7d');

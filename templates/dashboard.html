@@ -164,7 +164,7 @@
     </label>
     <button id="refresh">↺ refresh</button>
   </div>
-  <div id="cost-mode-tip"></div>
+  <div id="cost-mode-tip"><span id="cost-mode-desc"></span><span id="plan-note"></span></div>
   <div class="term-body">
 
     <!-- Overview panel -->
@@ -1138,8 +1138,8 @@ function setCostMode(mode) {
   document.querySelectorAll('.cost-mode-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.mode === mode)
   );
-  const tip = $('#cost-mode-tip');
-  if (tip) tip.textContent = COST_MODE_TIPS[mode] || '';
+  const desc = document.getElementById('cost-mode-desc');
+  if (desc) desc.textContent = COST_MODE_TIPS[mode] || '';
   renderCosts(mode);
   if (_trendChart && _lastSparkline) {
     const costDs = _trendChart.data.datasets.find(d => d.type === 'line');
@@ -1275,7 +1275,8 @@ setCostMode(activeCostMode);
     if (!localStorage.getItem('cu-cost-mode')) setCostMode(hint.mode);
     const planLabel = { api: 'API (pay-per-token)', subscription: 'Subscription', conservative: 'Conservative' }[hint.mode] || hint.mode;
     const tip = $('#cost-mode-tip');
-    if (tip) tip.textContent = (tip.textContent ? tip.textContent + '  ·  ' : '') + 'Detected plan: ' + planLabel;
+    const planNote = document.getElementById('plan-note');
+    if (planNote) planNote.textContent = '  ·  Detected plan: ' + planLabel;
   } catch {}
 })();
 applyPreset('7d');

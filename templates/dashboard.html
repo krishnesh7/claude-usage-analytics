@@ -562,6 +562,7 @@ function computeFluency(byProject, byModel) {
 
   function percentileRank(items, key, higherIsBetter) {
     const vals = items.map(p => p.raw[key]);
+    if (vals.every(v => v === vals[0])) return vals.map(() => 50);
     const sorted = [...vals].sort((a, b) => a - b);
     return items.map(p => {
       const rank = sorted.indexOf(p.raw[key]);
@@ -600,7 +601,7 @@ function renderFluencyPanel(byProject, byModel) {
   panel.style.display = '';
 
   function scoreCls(s) { return s >= 70 ? 'ok' : s >= 40 ? 'warn' : 'red'; }
-  const shortName = n => !n ? '(unknown)' : n.length > 22 ? n.slice(0, 20) + '…' : n;
+  const shortName = n => !n ? '(unknown)' : n.length > 22 ? n.slice(0, 21) + '…' : n;
 
   for (const p of scored.slice(0, 6)) {
     const card = document.createElement('div');

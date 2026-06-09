@@ -340,6 +340,7 @@ function renderKpiCards(totals, prior) {
   const cards = [
     {
       label: 'imputed cost',
+      tip: 'Cost estimated from token counts. The mode (API / Conservative / Subscription) sets the pricing assumption.',
       value: '$' + costSub.toFixed(2),
       costApi: totals.cost_api ?? totals.cost?.total_usd ?? 0,
       costConservative: totals.cost_conservative ?? totals.cost?.total_usd ?? 0,
@@ -350,16 +351,19 @@ function renderKpiCards(totals, prior) {
     },
     {
       label: 'sessions',
+      tip: 'Total conversation sessions in the selected period.',
       value: String(totals.sessions ?? 0),
       delta: prior != null ? mkDelta(totals.sessions ?? 0, pt.sessions ?? 0, true, v => String(Math.abs(Math.round(v)))) : null,
     },
     {
       label: 'total tokens',
+      tip: 'Sum of input, cache creation, cache read, and output tokens across all turns.',
       value: fmt(totals.total_tokens ?? 0),
       delta: prior != null ? mkDelta(totals.total_tokens ?? 0, pt.total_tokens ?? 0, false, v => fmt(Math.abs(v))) : null,
     },
     {
       label: 'cache hit',
+      tip: '% of input-side tokens served from cache. Higher means less re-sending repeated context.',
       value: totals.cache_hit_rate != null ? (totals.cache_hit_rate * 100).toFixed(1) + '%' : '—',
       delta: prior != null && totals.cache_hit_rate != null && pt.cache_hit_rate != null
         ? mkDelta(totals.cache_hit_rate, pt.cache_hit_rate, true, v => (Math.abs(v) * 100).toFixed(1) + '%')
@@ -369,6 +373,7 @@ function renderKpiCards(totals, prior) {
   for (const c of cards) {
     const card = document.createElement('div');
     card.className = 'kpi-card';
+    if (c.tip) card.dataset.tip = c.tip;
     card.appendChild(mkEl('div', c.label, 'kpi-label'));
     const valEl = document.createElement('div');
     valEl.className = 'kpi-value';

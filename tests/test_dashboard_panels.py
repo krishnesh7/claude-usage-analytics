@@ -92,6 +92,44 @@ def test_daily_cost_by_day_kind_filter(db):
     assert all_total == 1500, f"Expected 1500 total input tokens, got {all_total}"
 
 
+def _insert_full_turn(db_path, session_id, project_name, ts, model,
+                      input_tokens=1000, output_tokens=200,
+                      cache_creation_tokens=800, cache_read_tokens=3000):
+    import sqlite3 as _sq
+    conn = _sq.connect(str(db_path))
+    conn.execute(
+        "INSERT OR IGNORE INTO sessions(session_id, project_name, started_at) VALUES (?,?,?)",
+        (session_id, project_name, ts),
+    )
+    conn.execute(
+        """INSERT INTO turns(session_id, ts, model,
+             input_tokens, output_tokens,
+             cache_creation_tokens, cache_read_tokens)
+           VALUES (?,?,?,?,?,?,?)""",
+        (session_id, ts, model, input_tokens, output_tokens,
+         cache_creation_tokens, cache_read_tokens),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_by_project_has_fluency_fields(db):
+    """by_project rows must carry the fields used by computeFluency() client-side."""
+    _insert_full_turn(db, "fx1", "alpha", "2026-06-01T10:00:00", "claude-sonnet-4-6")
+    _insert_full_turn(db, "fx2", "beta",  "2026-06-01T11:00:00", "claude-opus-4-8")
+
+    from claude_usage.db import totals_by_project
+    rows = totals_by_project()
+
+    assert len(rows) >= 2
+    for r in rows:
+        assert "cache_read_tokens"     in r, f"missing cache_read_tokens in {r}"
+        assert "cache_creation_tokens" in r, f"missing cache_creation_tokens in {r}"
+        assert "input_tokens"          in r, f"missing input_tokens in {r}"
+        assert "total_tokens"          in r, f"missing total_tokens in {r}"
+        assert "turns"                 in r, f"missing turns in {r}"
+
+
 def test_build_sparkline_has_cost_usd(db):
     _insert_turn(db, "s1", "proj", "2026-05-01T10:00:00", "claude-3-5-sonnet-20241022", input_tokens=1000, output_tokens=500)
     from claude_usage._view import build

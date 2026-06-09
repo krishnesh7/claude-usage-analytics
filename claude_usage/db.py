@@ -177,7 +177,9 @@ def totals_by_project(since: datetime | None = None, kind: str | None = None, un
           COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
           COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
           COALESCE(SUM(t.cache_read_tokens), 0) AS cache_read_tokens,
-          COALESCE(SUM(t.output_tokens), 0) AS output_tokens
+          COALESCE(SUM(t.output_tokens), 0) AS output_tokens,
+          COALESCE(SUM(t.input_tokens), 0) + COALESCE(SUM(t.cache_creation_tokens), 0)
+            + COALESCE(SUM(t.cache_read_tokens), 0) + COALESCE(SUM(t.output_tokens), 0) AS total_tokens
         FROM sessions s
         LEFT JOIN turns t ON t.session_id = s.session_id
     """
@@ -185,7 +187,7 @@ def totals_by_project(since: datetime | None = None, kind: str | None = None, un
     sql += (
         clause
         + " GROUP BY COALESCE(s.project_name, s.project_path)"
-        + " ORDER BY input_tokens + cache_creation_tokens + cache_read_tokens + output_tokens DESC"
+        + " ORDER BY total_tokens DESC"
     )
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]

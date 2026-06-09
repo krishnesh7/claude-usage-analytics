@@ -1,5 +1,5 @@
 ---
-description: Manually override the SDLC stage for this session. Usage:/stage <requirements|design|impl|test|deploy|adhoc>
+description: Manually override the SDLC stage for this session. Usage:/stage <requirements|design|impl|test|deploy|explore|adhoc>
 allowed-tools: Bash
 argument-hint: "<stage>"
 ---

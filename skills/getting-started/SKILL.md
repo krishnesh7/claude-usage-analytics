@@ -50,7 +50,7 @@ cat ~/.claude/usage/stage_map.json
 
 If the project's directory name is not in the `mappings` block, offer to add
 it. Ask: "What SDLC stage are most sessions in this project?
-(requirements / design / impl / test / deploy / adhoc)"
+(requirements / design / impl / test / deploy / explore / adhoc)"
 
 When they answer, show them the line to add to `stage_map.json`.
 

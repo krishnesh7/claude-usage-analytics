@@ -46,7 +46,7 @@ hook never needs to ask:
 "my-saas-app": "impl"
 ```
 
-Valid stages: `requirements` · `design` · `impl` · `test` · `deploy` · `adhoc`
+Valid stages: `requirements` · `design` · `impl` · `test` · `deploy` · `explore` · `adhoc`
 
 Skip this if you want per-session stage tagging (Claude will ask at a natural
 moment when the stage is unknown).
@@ -141,6 +141,12 @@ cu project relink   # re-run project tagging after adding patterns
 # Force full re-parse + enrichment
 cu parse --force
 
+# Classify new sessions
+cu classify
+
+# Re-run classifier on all existing sessions (e.g. after editing stage_keywords.json)
+cu classify --reclassify
+
 # Override a session's stage
 cu stage --session <uuid> --set impl
 
@@ -158,7 +164,7 @@ cu session-resolve --cwd /path/to/dir
 | Section | What to look for |
 |---|---|
 | **Summary** | Lifetime cost; compare projects to size up relative spend |
-| **By SDLC stage** | High `adhoc` = sessions aren't being tagged; add to `stage_map.json` |
+| **By SDLC stage** | High `adhoc` = sessions aren't being tagged; run `cu classify --reclassify` or add project to `stage_map.json` |
 | **By work mode** | High `subagent-orchestration` = lots of parallel agent work |
 | **Most expensive prompts** | Tokens include all subagent work — the *true* cost of each message |
 | **Cache breaks** | Each row = cache flushed mid-session; trigger column shows what caused it |

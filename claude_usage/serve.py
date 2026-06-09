@@ -95,6 +95,12 @@ def make_app() -> FastAPI:
         except Exception as exc:
             return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
+    @app.get("/api/plan-hint")
+    def api_plan_hint() -> JSONResponse:
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            return JSONResponse({"mode": "api", "reason": "ANTHROPIC_API_KEY is set"})
+        return JSONResponse({"mode": "subscription", "reason": "No API key detected"})
+
     @app.get("/")
     def index() -> FileResponse:
         return FileResponse(

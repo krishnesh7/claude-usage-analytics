@@ -26,6 +26,7 @@
   .controls button:hover { background: rgba(255,255,255,0.08); }
   .preset-btn { cursor: pointer; }
   .preset-btn.active { border-color: var(--blue); color: var(--blue); }
+  .cost-mode-btn.hint-match::after { content: '·'; margin-left: 3px; color: var(--green, #43A047); font-size: 14px; line-height: 1; vertical-align: middle; }
   #cost-mode-tip { padding: 2px 14px 4px; background: var(--tb); color: var(--dim); font-size: 10px; border-bottom: 1px solid var(--outline); min-height: 18px; }
   .date-err { border-color: var(--red) !important; }
   .hero { font-size: 44px; font-weight: 700; line-height: 1; margin: 8px 0 4px; }
@@ -1247,6 +1248,15 @@ document.querySelectorAll('.cost-mode-btn').forEach(b =>
   b.addEventListener('click', () => setCostMode(b.dataset.mode))
 );
 setCostMode(activeCostMode);
+(async () => {
+  try {
+    const hint = await fetch('/api/plan-hint').then(r => r.json());
+    document.querySelectorAll('.cost-mode-btn').forEach(b =>
+      b.classList.toggle('hint-match', b.dataset.mode === hint.mode)
+    );
+    if (!localStorage.getItem('cu-cost-mode')) setCostMode(hint.mode);
+  } catch {}
+})();
 applyPreset('7d');
 setInterval(load, 30000);
 renderBreadcrumb([{ label: '~ overview' }]);

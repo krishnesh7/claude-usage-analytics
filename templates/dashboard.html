@@ -78,7 +78,6 @@
   padding: 5px 9px; font-size: 11px; max-width: 260px;
   line-height: 1.4; display: none; white-space: normal;
 }
-[data-tip] { cursor: default; }
   th.sortable { cursor: pointer; user-select: none; }
   th.sortable:hover { color: var(--fg); }
   th.sortable[data-sort="asc"]::after { content: ' ▲'; color: var(--clay); font-size: 9px; }
@@ -1299,11 +1298,14 @@ function initTooltips() {
     tt.style.display = 'block';
   });
   document.addEventListener('mousemove', e => {
+    if (tt.style.display === 'none') return;
     tt.style.left = (e.clientX + 14) + 'px';
     tt.style.top  = (e.clientY + 14) + 'px';
   });
   document.addEventListener('mouseout', e => {
-    if (!e.target.closest('[data-tip]')) tt.style.display = 'none';
+    const el = e.target.closest('[data-tip]');
+    if (el && el.contains(e.relatedTarget)) return;
+    tt.style.display = 'none';
   });
 }
 initTooltips();

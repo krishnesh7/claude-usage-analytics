@@ -206,7 +206,7 @@ def sessions_for_project(project: str, since: datetime | None = None, limit: int
           s.agent_type,
           s.parent_session_id,
           s.subagent_description,
-          COALESCE(ss.stage, 'adhoc') AS stage,
+          ss.stage AS stage,
           COUNT(t.id) AS turns,
           COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
           COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
@@ -216,6 +216,8 @@ def sessions_for_project(project: str, since: datetime | None = None, limit: int
         LEFT JOIN turns t ON t.session_id = s.session_id
         LEFT JOIN session_stage ss ON ss.session_id = s.session_id
         WHERE (s.project_name = ? OR s.project_path LIKE ? OR s.project_dir LIKE ?)
+          AND s.parent_session_id IS NULL
+          AND s.session_id NOT LIKE '%::agent-%'
     """
     params: list = [project, f"%{project}%", f"%{project}%"]
     if since:
@@ -240,7 +242,7 @@ def sessions_for_system_ops(since: datetime | None = None, until: datetime | Non
           s.started_at, s.ended_at, s.is_tracker_overhead,
           s.ai_title, s.first_user_message, s.agent_type,
           s.parent_session_id, s.subagent_description,
-          COALESCE(ss.stage, 'adhoc') AS stage,
+          ss.stage AS stage,
           COUNT(t.id) AS turns,
           COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
           COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,

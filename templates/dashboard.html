@@ -528,6 +528,7 @@ function mkRow(cells, rowCls) {
       td.textContent = String(c.text ?? '');
       if (c.cls) td.className = c.cls;
       if (c.title) td.title = c.title;
+      if (c.tip) td.dataset.tip = c.tip;
       if (c.costApi != null) {
         td.dataset.costApi = c.costApi;
         td.dataset.costConservative = c.costConservative;

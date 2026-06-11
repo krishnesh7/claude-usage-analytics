@@ -205,9 +205,23 @@
       </div>
 
       <div id="fluency-panel" style="display:none">
-        <h2>fluency <span class="sub" style="font-size:12px;font-weight:400;color:var(--dim);margin-left:8px">token efficiency by project</span></h2>
+        <h2>by fluency <span class="sub" style="font-size:12px;font-weight:400;color:var(--dim);margin-left:8px">token efficiency by project</span></h2>
         <p class="hint">Percentile scores within your projects. Higher = more efficient.</p>
-        <div id="fluency-cards" class="fluency-row"></div>
+        <table id="t-fluency">
+          <colgroup>
+            <col class="c-name"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct">
+          </colgroup>
+          <thead><tr>
+            <th>project</th>
+            <th data-tip="Composite of the 4 axes below, as a percentile among your projects. Tells you which projects have the healthiest token usage patterns.">fluency</th>
+            <th data-tip="% of input-side tokens served from cache. High = you reuse context well instead of re-sending it fresh.">cache hygiene</th>
+            <th data-tip="Ratio of cache reads to cache writes. High = your cached prompts got reused many times; low = cache was written but rarely read back.">cache payback</th>
+            <th data-tip="How much of your token spend used lighter models (Sonnet/Haiku) vs Opus. Scored globally across all projects in v1.">model fit</th>
+            <th data-tip="Your cost per turn relative to your other projects. High = efficient spend per interaction.">cost economy</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="fluency-recs"></div>
       </div>
 
       <h2 id="h-project">by project</h2>

@@ -191,26 +191,6 @@
         <div class="chart-panel"><canvas id="chart-donut"></canvas></div>
       </div>
 
-      <div id="fluency-panel" style="display:none">
-        <h2>by fluency <span class="sub" style="font-size:12px;font-weight:400;color:var(--dim);margin-left:8px">token efficiency by project</span></h2>
-        <p class="hint">Percentile scores within your projects. Higher = more efficient.</p>
-        <table id="t-fluency">
-          <colgroup>
-            <col class="c-name"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct">
-          </colgroup>
-          <thead><tr>
-            <th>project</th>
-            <th data-tip="Composite of the 4 axes below, as a percentile among your projects. Tells you which projects have the healthiest token usage patterns.">fluency</th>
-            <th data-tip="% of input-side tokens served from cache. High = you reuse context well instead of re-sending it fresh.">cache hygiene</th>
-            <th data-tip="Ratio of cache reads to cache writes. High = your cached prompts got reused many times; low = cache was written but rarely read back.">cache payback</th>
-            <th data-tip="How much of your token spend used lighter models (Sonnet/Haiku) vs Opus. Scored globally across all projects in v1.">model fit</th>
-            <th data-tip="Your cost per turn relative to your other projects. High = efficient spend per interaction.">cost economy</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-        <div id="fluency-recs"></div>
-      </div>
-
       <h2 id="h-project">by project</h2>
       <p class="hint">Click a row to drill into individual sessions.</p>
       <table id="t-project">
@@ -261,6 +241,26 @@
         </tr></thead>
         <tbody></tbody>
       </table>
+
+      <div id="fluency-panel" style="display:none">
+        <h2>by fluency <span class="sub" style="font-size:12px;font-weight:400;color:var(--dim);margin-left:8px">token efficiency by project</span></h2>
+        <p class="hint">Percentile scores within your projects. Higher = more efficient.</p>
+        <table id="t-fluency">
+          <colgroup>
+            <col class="c-name"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct">
+          </colgroup>
+          <thead><tr>
+            <th>project</th>
+            <th data-tip="Composite of the 4 axes below, as a percentile among your projects. Tells you which projects have the healthiest token usage patterns.">fluency</th>
+            <th data-tip="% of input-side tokens served from cache. High = you reuse context well instead of re-sending it fresh.">cache hygiene</th>
+            <th data-tip="Ratio of cache reads to cache writes. High = your cached prompts got reused many times; low = cache was written but rarely read back.">cache payback</th>
+            <th data-tip="How much of your token spend used lighter models (Sonnet/Haiku) vs Opus. Scored globally across all projects in v1.">model fit</th>
+            <th data-tip="Your cost per turn relative to your other projects. High = efficient spend per interaction.">cost economy</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="fluency-recs"></div>
+      </div>
 
       <h2 id="h-agent">by subagent</h2>
       <p class="hint">Click a row to see the project distribution for that agent type.</p>
@@ -641,7 +641,7 @@ function renderFluencyTable(scored) {
     const tr = mkRow([
       { text: shortName(p.name), title: p.name },
       { text: String(p.composite), cls: 'pct fluency-score ' + cls },
-    ], 'clickable');
+    ]);
     for (const ax of p.axes) {
       const axCls = fluencyScoreCls(ax.score);
       const td = document.createElement('td');
@@ -653,9 +653,6 @@ function renderFluencyTable(scored) {
       td.appendChild(mkEl('span', String(ax.score), 'share-text pct ' + axCls));
       tr.appendChild(td);
     }
-    const isSysOps = !!p.r.is_system_ops;
-    const drillTarget = isSysOps ? '__system_ops__' : (p.r.project_name || p.name);
-    tr.addEventListener('click', () => drillIntoProject(p.name, drillTarget));
     tbody.appendChild(tr);
   }
 }
@@ -806,7 +803,7 @@ function renderProjectTable(rows, priorRows) {
     const tooltip = isSysOps
       ? 'Plugin & automation sessions (memory consolidation etc.) — included in grand total'
       : (r.project_path || '');
-    const drillKey = r.project_name || name;
+    const drillKey = r.project_name || r.display_name || r.project_path;
     const priorCost = priorByKey[drillKey] ?? null;
     let deltaCell;
     if (priorCost === null) {

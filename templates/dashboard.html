@@ -90,26 +90,10 @@
   .session-sub-id { color: var(--blue); font-size: 10px; letter-spacing: 0.3px; }
   .hint { color: var(--dim); font-size: 11px; margin: 4px 0 6px; }
   /* Fluency panel */
-  .fluency-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
-  .fluency-card {
-    background: rgba(255,255,255,0.03); border: 1px solid var(--outline);
-    border-radius: 6px; padding: 14px 16px; min-width: 180px; flex: 1 1 180px; max-width: 240px;
-  }
-  .fluency-name { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; margin-bottom: 8px; }
-  .fluency-badge { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
-  .fluency-badge.ok   { color: var(--green); }
-  .fluency-badge.warn { color: var(--yellow); }
-  .fluency-badge.red  { color: var(--red); }
-  .fluency-axis { margin-bottom: 6px; }
-  .fluency-axis-header { display: flex; justify-content: space-between;
-    font-size: 10px; color: var(--dim); margin-bottom: 2px; }
-  .fluency-axis-header .ax-score { font-weight: 600; }
-  .fluency-bar-track { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; }
-  .fluency-bar-fill  { height: 4px; border-radius: 2px; transition: width 0.3s; }
-  .fluency-bar-fill.ok   { background: var(--green); }
-  .fluency-bar-fill.warn { background: var(--yellow); }
-  .fluency-bar-fill.red  { background: var(--red); }
+  .fluency-score { font-weight: 700; }
+  .fluency-rec { border-left: 3px solid var(--red); padding: 6px 10px; margin-bottom: 6px;
+    background: rgba(255,107,128,0.06); font-size: 12px; line-height: 1.4; }
+  .fluency-rec a { color: var(--blue); display: inline-block; margin-top: 4px; }
   #panel-sessions { display: none; }
   #panel-kind { display: none; }
   .kind-cards { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
@@ -156,6 +140,9 @@
   /* ── Inline share bar ── */
   .share-cell { position: relative; overflow: hidden; }
   .share-bar { position: absolute; top: 0; left: 0; height: 100%; background: rgba(100,160,255,0.10); pointer-events: none; }
+  .share-bar.ok   { background: rgba(78,186,101,0.18); }
+  .share-bar.warn { background: rgba(255,193,7,0.18); }
+  .share-bar.red  { background: rgba(255,107,128,0.18); }
   .share-text { position: relative; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>

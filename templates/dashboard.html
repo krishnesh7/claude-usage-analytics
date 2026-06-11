@@ -614,6 +614,7 @@ function computeFluency(byProject, byModel) {
 function renderFluencyPanel(byProject, byModel) {
   const panel = $('#fluency-panel');
   const container = $('#fluency-cards');
+  if (!container) return;
   clearKids(container);
   const scored = computeFluency(byProject, byModel);
   if (!scored) { panel.style.display = 'none'; return; }

@@ -528,6 +528,7 @@ function mkRow(cells, rowCls) {
       td.textContent = String(c.text ?? '');
       if (c.cls) td.className = c.cls;
       if (c.title) td.title = c.title;
+      if (c.tip) td.dataset.tip = c.tip;
       if (c.costApi != null) {
         td.dataset.costApi = c.costApi;
         td.dataset.costConservative = c.costConservative;
@@ -558,6 +559,28 @@ function fmtCacheHit(rate) {
   const pct = (rate * 100).toFixed(0) + '%';
   const cls = rate >= 0.85 ? 'pct ok' : rate >= 0.5 ? 'pct warn' : 'pct red';
   return { text: pct, cls };
+}
+
+function modelTip(model) {
+  const m = (model || '').toLowerCase();
+  if (m.includes('opus'))   return "Opus — Anthropic's most capable model. Best for complex reasoning, architecture, and high-stakes work. Highest cost per token.";
+  if (m.includes('sonnet')) return "Sonnet — balanced model for everyday coding and analysis. Strong capability at a fraction of Opus's cost.";
+  if (m.includes('haiku'))  return "Haiku — fastest, cheapest model. Best for simple, high-volume, or latency-sensitive tasks.";
+  return 'Claude model used for this work.';
+}
+
+const STAGE_TIPS = {
+  requirements: 'Defining what to build — specs, user stories, requirements docs, roadmaps.',
+  design: 'Architecture and design work — system design, data models, diagrams, tradeoffs.',
+  test: 'Writing or running tests — unit, integration, e2e, TDD.',
+  deploy: 'Shipping and operating — CI/CD, releases, deployments, infrastructure changes.',
+  explore: 'Research and Q&A — understanding how something works, without building yet.',
+  impl: 'Building and fixing — implementing features, fixing bugs, refactoring code.',
+  adhoc: "Catch-all — sessions that didn't clearly match another stage.",
+  _tracker_overhead_: "Internal usage-analytics tooling overhead (this dashboard's own sessions).",
+};
+function stageTip(stage) {
+  return STAGE_TIPS[stage] || "SDLC stage classified from the session's first message.";
 }
 
 function computeFluency(byProject, byModel) {
@@ -638,8 +661,9 @@ function renderFluencyTable(scored) {
   markSortHeader('t-fluency');
   for (const p of rows.slice(0, 20)) {
     const cls = fluencyScoreCls(p.composite);
+    const tip = p.r.description || (p.name && p.name.length > 22 ? p.name : '');
     const tr = mkRow([
-      { text: shortName(p.name), title: p.name },
+      { text: shortName(p.name), tip },
       { text: String(p.composite), cls: 'pct fluency-score ' + cls },
     ]);
     for (const ax of p.axes) {
@@ -736,7 +760,7 @@ function renderStageTable(rows) {
     const totalTokens = (r.input_tokens || 0) + (r.cache_creation_tokens || 0)
                       + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
     const tr = mkRow([
-      r.stage, r.sessions, r.turns,
+      { text: r.stage, tip: stageTip(r.stage) }, r.sessions, r.turns,
       fmt(totalTokens),
       { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
         costApi: r.cost_api ?? r.cost?.total_usd ?? 0,
@@ -758,7 +782,7 @@ function renderProjectStageTable(rows) {
     const totalTokens = (r.input_tokens || 0) + (r.cache_creation_tokens || 0)
                       + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
     const tr = mkRow([
-      r.stage, r.sessions, r.turns,
+      { text: r.stage, tip: stageTip(r.stage) }, r.sessions, r.turns,
       fmt(totalTokens),
       { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
         costApi: r.cost_api ?? r.cost?.total_usd ?? 0,
@@ -803,7 +827,7 @@ function renderProjectTable(rows, priorRows) {
       : (r.project_name ? name : shortenPath(name) + ' (path)');
     const tooltip = isSysOps
       ? 'Plugin & automation sessions (memory consolidation etc.) — included in grand total'
-      : (r.project_path || '');
+      : (r.description || r.project_path || '');
     const drillKey = r.project_name || r.display_name || r.project_path;
     const priorCost = priorByKey[drillKey] ?? null;
     let deltaCell;
@@ -817,7 +841,7 @@ function renderProjectTable(rows, priorRows) {
     }
     const rowCls = isSysOps ? 'sys-ops clickable' : 'clickable';
     const tr = mkRow([
-      { text: label, title: tooltip },
+      { text: label, tip: tooltip },
       r.sessions, r.turns,
       fmt(r.total_tokens),
       { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
@@ -855,7 +879,7 @@ function renderModelTable(rows) {
   markSortHeader('t-model');
   for (const r of rows) {
     tbody.appendChild(mkRow([
-      r.model,
+      { text: r.model, tip: modelTip(r.model) },
       fmt(r.total_tokens),
       fmt(r.input_tokens),
       fmt(r.cache_read_tokens),

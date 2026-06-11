@@ -2,7 +2,9 @@
 render from this same dict, so they stay in sync."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from . import db as dbmod
@@ -40,6 +42,46 @@ def _project_label(r: dict) -> str:
         if len(parts) > 2:
             return "…/" + "/".join(parts[-2:]) + " (path)"
     return path + " (path)"
+
+
+_README_NAMES = ("README.md", "Readme.md", "readme.md")
+
+
+def _readme_description(root_path: str) -> str | None:
+    """First non-heading, non-badge line of the project's README, truncated to ~200 chars."""
+    if not root_path:
+        return None
+    root = Path(root_path)
+    for name in _README_NAMES:
+        f = root / name
+        if not f.exists():
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return None
+        for line in text.splitlines()[:60]:
+            line = line.strip()
+            if not line or line.startswith(("#", "[![", "![", "<")):
+                continue
+            line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)
+            line = re.sub(r"\[(.+?)\]\(.+?\)", r"\1", line)
+            return line[:197] + "…" if len(line) > 200 else line
+        return None
+    return None
+
+
+def _project_description(r: dict, registry: dict) -> str | None:
+    """projects.json `notes` (if non-empty) else README description, else None."""
+    name = r.get("project_name")
+    if not name:
+        return None
+    project = registry.get(name)
+    if not project:
+        return None
+    if project.notes and project.notes.strip():
+        return project.notes.strip()
+    return _readme_description(project.root_path)
 
 
 _SYSTEM_TEMP_PREFIXES = (
@@ -240,6 +282,7 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
     by_project = []
     if not project:
         by_project = dbmod.totals_by_project(since=since_dt, kind=kind, until=until_dt)
+        registry = projects_mod.load_all()
         for r in by_project[:30]:
             lookup_key = r.get("project_name") or r.get("project_path", "")
             per_model = dbmod.turns_by_model(project=lookup_key, since=since_dt, until=until_dt)
@@ -255,6 +298,7 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
             r["pct_of_total"] = (100.0 * r["total_tokens"] / grand_total) if grand_total else 0.0
             r["cache_hit_rate"] = _cache_hit_rate(r)
             r["label"] = _project_label(r)
+            r["description"] = _project_description(r, registry)
         by_project = _collapse_project_rows(by_project[:30], grand_total)
 
     by_agent_type = dbmod.totals_by_agent_type(project=project, since=since_dt, kind=kind, until=until_dt)

@@ -561,6 +561,14 @@ function fmtCacheHit(rate) {
   return { text: pct, cls };
 }
 
+function modelTip(model) {
+  const m = (model || '').toLowerCase();
+  if (m.includes('opus'))   return "Opus — Anthropic's most capable model. Best for complex reasoning, architecture, and high-stakes work. Highest cost per token.";
+  if (m.includes('sonnet')) return "Sonnet — balanced model for everyday coding and analysis. Strong capability at a fraction of Opus's cost.";
+  if (m.includes('haiku'))  return "Haiku — fastest, cheapest model. Best for simple, high-volume, or latency-sensitive tasks.";
+  return 'Claude model used for this work.';
+}
+
 function computeFluency(byProject, byModel) {
   if (!byProject || byProject.length < 2) return null;
 
@@ -857,7 +865,7 @@ function renderModelTable(rows) {
   markSortHeader('t-model');
   for (const r of rows) {
     tbody.appendChild(mkRow([
-      r.model,
+      { text: r.model, tip: modelTip(r.model) },
       fmt(r.total_tokens),
       fmt(r.input_tokens),
       fmt(r.cache_read_tokens),

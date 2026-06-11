@@ -641,7 +641,7 @@ function renderFluencyTable(scored) {
     const tr = mkRow([
       { text: shortName(p.name), title: p.name },
       { text: String(p.composite), cls: 'pct fluency-score ' + cls },
-    ]);
+    ], 'clickable');
     for (const ax of p.axes) {
       const axCls = fluencyScoreCls(ax.score);
       const td = document.createElement('td');
@@ -653,6 +653,9 @@ function renderFluencyTable(scored) {
       td.appendChild(mkEl('span', String(ax.score), 'share-text pct ' + axCls));
       tr.appendChild(td);
     }
+    const isSysOps = !!p.r.is_system_ops;
+    const drillTarget = isSysOps ? '__system_ops__' : (p.r.project_name || p.name);
+    tr.addEventListener('click', () => drillIntoProject(p.name, drillTarget));
     tbody.appendChild(tr);
   }
 }
@@ -1145,8 +1148,6 @@ function sinceUntilQuery() {
 function sessionsUrl(projectKey, stage) {
   let url = '/api/sessions?project=' + encodeURIComponent(projectKey);
   if (stage) url += '&stage=' + encodeURIComponent(stage);
-  const kind = $('#f-kind') ? $('#f-kind').value : 'user';
-  if (kind && kind !== 'all') url += '&kind=' + encodeURIComponent(kind);
   return url + sinceUntilQuery();
 }
 

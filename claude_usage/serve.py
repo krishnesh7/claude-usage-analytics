@@ -125,16 +125,14 @@ def make_app() -> FastAPI:
         since: str = Query(default="all"),
         until: str | None = Query(default=None),
         stage: str | None = Query(default=None),
-        kind: str | None = Query(default=None),
     ) -> JSONResponse:
         since_dt = dbmod.parse_since(since)
         until_dt = dbmod.parse_until(until)
-        kind_arg = None if kind in (None, "", "all") else kind
         prices = pricing_mod.load_prices()
         if project == "__system_ops__":
-            rows = dbmod.sessions_for_system_ops(since=since_dt, until=until_dt, kind=kind_arg)
+            rows = dbmod.sessions_for_system_ops(since=since_dt, until=until_dt)
         else:
-            rows = dbmod.sessions_for_project(project, stage=stage, since=since_dt, until=until_dt, kind=kind_arg)
+            rows = dbmod.sessions_for_project(project, stage=stage, since=since_dt, until=until_dt)
         # Impute cost per session
         for r in rows:
             per_model = dbmod.turns_by_model(

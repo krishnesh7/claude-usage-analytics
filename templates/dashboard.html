@@ -1496,6 +1496,15 @@ enableSort('t-model', {
   5: r => r.cost?.total_usd ?? 0, 6: r => r.cache_hit_rate ?? -1,
 }, renderModelTable);
 
+enableSort('t-fluency', {
+  0: r => r.name || '',
+  1: r => r.composite,
+  2: r => r.axes[0].score,
+  3: r => r.axes[1].score,
+  4: r => r.axes[2].score,
+  5: r => r.axes[3].score,
+}, renderFluencyTable);
+
 $('#refresh').addEventListener('click', load);
 $('#f-project').addEventListener('change', load);
 document.querySelectorAll('.preset-btn:not(.cost-mode-btn)').forEach(b =>

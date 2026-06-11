@@ -48,9 +48,9 @@
   th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; }
   th { color: var(--dim); font-weight: 500; font-size: 11px; letter-spacing: 0.4px; }
   th:first-child, td:first-child { text-align: left; overflow: hidden; text-overflow: ellipsis; }
-  #t-project col.c-name, #t-stage col.c-name, #t-agent col.c-name, #t-sessions col.c-name { width: auto; }
-  #t-project col.c-num, #t-stage col.c-num, #t-agent col.c-num, #t-sessions col.c-num { width: 78px; }
-  #t-project col.c-pct, #t-stage col.c-pct { width: 56px; }
+  #t-project col.c-name, #t-stage col.c-name, #t-project-stage col.c-name, #t-agent col.c-name, #t-sessions col.c-name { width: auto; }
+  #t-project col.c-num, #t-stage col.c-num, #t-project-stage col.c-num, #t-agent col.c-num, #t-sessions col.c-num { width: 78px; }
+  #t-project col.c-pct, #t-stage col.c-pct, #t-project-stage col.c-pct { width: 56px; }
   #t-project col.c-delta { width: 78px; }
   tr:hover td { background: rgba(255,255,255,0.025); }
   tr.clickable { cursor: pointer; }
@@ -278,6 +278,27 @@
       <h2 id="h-skills">top skills</h2>
       <table id="t-skills" style="display:none">
         <thead><tr><th>skill</th><th>invocations</th><th>sessions</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Project SDLC-stage panel -->
+    <div id="panel-stage" style="display:none">
+      <h2>by stage</h2>
+      <p class="hint">Click a row to see the user/subagent breakdown for that stage.</p>
+      <table id="t-project-stage">
+        <colgroup>
+          <col class="c-name"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-pct"><col class="c-pct">
+        </colgroup>
+        <thead><tr>
+          <th>stage</th>
+          <th data-tip="Number of conversation sessions">sess</th>
+          <th data-tip="Number of back-and-forth exchanges (user message + assistant response = 1 turn)">turns</th>
+          <th data-tip="Total tokens consumed (input + cache creation + cache read + output)">tokens</th>
+          <th data-tip="Estimated cost under the selected pricing mode">cost</th>
+          <th data-tip="% of input-side tokens served from cache. Green ≥ 85%, yellow ≥ 50%, red < 50%.">cache·hit</th>
+          <th data-tip="This stage's share of this project's total tokens">%</th>
+        </tr></thead>
         <tbody></tbody>
       </table>
     </div>

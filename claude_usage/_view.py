@@ -72,8 +72,16 @@ def _readme_description(root_path: str) -> str | None:
 
 
 def _project_description(r: dict, registry: dict) -> str | None:
-    """Stub — implemented fully in a follow-up task."""
-    return None
+    """projects.json `notes` (if non-empty) else README description, else None."""
+    name = r.get("project_name")
+    if not name:
+        return None
+    project = registry.get(name)
+    if not project:
+        return None
+    if project.notes and project.notes.strip():
+        return project.notes.strip()
+    return _readme_description(project.root_path)
 
 
 _SYSTEM_TEMP_PREFIXES = (

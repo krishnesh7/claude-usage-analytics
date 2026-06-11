@@ -35,3 +35,27 @@ def test_readme_description_truncates_long_lines(tmp_path):
     result = _readme_description(str(tmp_path))
     assert len(result) == 198  # 197 chars + "…"
     assert result.endswith("…")
+
+
+from claude_usage import projects as projects_mod
+
+
+def test_project_description_prefers_notes(tmp_path):
+    registry = {
+        "alpha": projects_mod.Project(name="alpha", root_path=str(tmp_path), notes="Hand-written description"),
+    }
+    assert _project_description({"project_name": "alpha"}, registry) == "Hand-written description"
+
+
+def test_project_description_falls_back_to_readme(tmp_path):
+    (tmp_path / "README.md").write_text("# Alpha\n\nDoes alpha things.\n")
+    registry = {
+        "alpha": projects_mod.Project(name="alpha", root_path=str(tmp_path), notes=""),
+    }
+    assert _project_description({"project_name": "alpha"}, registry) == "Does alpha things."
+
+
+def test_project_description_none_for_unregistered_or_path_rows():
+    registry = {}
+    assert _project_description({"project_path": "/some/path"}, registry) is None
+    assert _project_description({"project_name": "unknown"}, registry) is None

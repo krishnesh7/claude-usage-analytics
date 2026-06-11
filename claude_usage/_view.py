@@ -2,7 +2,9 @@
 render from this same dict, so they stay in sync."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from . import db as dbmod
@@ -40,6 +42,38 @@ def _project_label(r: dict) -> str:
         if len(parts) > 2:
             return "…/" + "/".join(parts[-2:]) + " (path)"
     return path + " (path)"
+
+
+_README_NAMES = ("README.md", "Readme.md", "readme.md")
+
+
+def _readme_description(root_path: str) -> str | None:
+    """First non-heading, non-badge line of the project's README, truncated to ~200 chars."""
+    if not root_path:
+        return None
+    root = Path(root_path)
+    for name in _README_NAMES:
+        f = root / name
+        if not f.exists():
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return None
+        for line in text.splitlines()[:60]:
+            line = line.strip()
+            if not line or line.startswith(("#", "[![", "![", "<")):
+                continue
+            line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)
+            line = re.sub(r"\[(.+?)\]\(.+?\)", r"\1", line)
+            return line[:197] + "…" if len(line) > 200 else line
+        return None
+    return None
+
+
+def _project_description(r: dict, registry: dict) -> str | None:
+    """Stub — implemented fully in a follow-up task."""
+    return None
 
 
 _SYSTEM_TEMP_PREFIXES = (

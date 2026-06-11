@@ -751,6 +751,28 @@ function renderStageTable(rows) {
   }
 }
 
+function renderProjectStageTable(rows) {
+  const tbody = $('#t-project-stage tbody');
+  clearKids(tbody);
+  for (const r of rows) {
+    const totalTokens = (r.input_tokens || 0) + (r.cache_creation_tokens || 0)
+                      + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
+    const tr = mkRow([
+      r.stage, r.sessions, r.turns,
+      fmt(totalTokens),
+      { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
+        costApi: r.cost_api ?? r.cost?.total_usd ?? 0,
+        costConservative: r.cost_conservative ?? r.cost?.total_usd ?? 0,
+        costSubscription: r.cost_subscription ?? r.cost?.total_usd ?? 0 },
+      fmtCacheHit(r.cache_hit_rate),
+      { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
+    ], 'clickable');
+    tr.addEventListener('click', () => drillIntoStage(r.stage));
+    tbody.appendChild(tr);
+  }
+  renderCosts(activeCostMode);
+}
+
 function renderProjectTable(rows, priorRows) {
   rowCache['t-project'] = rows;
   const tbody = $('#t-project tbody');
@@ -945,6 +967,9 @@ async function toggleBreakdown(parentTr, dim, key, colspan) {
 let currentSessions = [];
 let currentKindSessions = [];  // sessions for the currently-selected kind
 let currentProjectLabel = '';
+let currentProjectKey = '';
+let currentStage = null;
+let currentKindBreadcrumb = [];
 
 function _sessionStats(sessions) {
   const count = sessions.length;

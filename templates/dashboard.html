@@ -804,7 +804,7 @@ function renderProjectTable(rows, priorRows) {
       : (r.project_name ? name : shortenPath(name) + ' (path)');
     const tooltip = isSysOps
       ? 'Plugin & automation sessions (memory consolidation etc.) — included in grand total'
-      : (r.project_path || '');
+      : (r.description || r.project_path || '');
     const drillKey = r.project_name || r.display_name || r.project_path;
     const priorCost = priorByKey[drillKey] ?? null;
     let deltaCell;
@@ -818,7 +818,7 @@ function renderProjectTable(rows, priorRows) {
     }
     const rowCls = isSysOps ? 'sys-ops clickable' : 'clickable';
     const tr = mkRow([
-      { text: label, title: tooltip },
+      { text: label, tip: tooltip },
       r.sessions, r.turns,
       fmt(r.total_tokens),
       { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),

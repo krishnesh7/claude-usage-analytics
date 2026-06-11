@@ -754,6 +754,7 @@ function renderProjectStageTable(rows) {
   const tbody = $('#t-project-stage tbody');
   clearKids(tbody);
   for (const r of rows) {
+    const rowCls = r.stage === '_tracker_overhead_' ? 'stage-overhead clickable' : 'clickable';
     const totalTokens = (r.input_tokens || 0) + (r.cache_creation_tokens || 0)
                       + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
     const tr = mkRow([
@@ -765,7 +766,7 @@ function renderProjectStageTable(rows) {
         costSubscription: r.cost_subscription ?? r.cost?.total_usd ?? 0 },
       fmtCacheHit(r.cache_hit_rate),
       { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
-    ], 'clickable');
+    ], rowCls);
     tr.addEventListener('click', () => drillIntoStage(r.stage));
     tbody.appendChild(tr);
   }

@@ -421,6 +421,20 @@ function renderKpiCards(totals, prior) {
   }
 }
 
+// Append text to `el`, rendering any <b>...</b> spans as real <b> elements
+// without using innerHTML (avoids HTML injection from any embedded text).
+function appendRichText(el, text) {
+  const parts = text.split(/(<b>[^<]*<\/b>)/g);
+  for (const part of parts) {
+    const m = part.match(/^<b>([^<]*)<\/b>$/);
+    if (m) {
+      el.appendChild(mkEl('b', m[1]));
+    } else {
+      el.appendChild(document.createTextNode(part));
+    }
+  }
+}
+
 function renderTakes(takes) {
   const section = $('#takes-section');
   clearKids(section);
@@ -432,16 +446,7 @@ function renderTakes(takes) {
     row.style.borderLeftColor = borderColors[t.cls] || 'var(--dim)';
     row.appendChild(mkEl('span', t.fig, 'take-fig'));
     const txtEl = document.createElement('span');
-    // Parse <b>...</b> from server-generated text without using innerHTML
-    const parts = t.txt.split(/(<b>[^<]*<\/b>)/g);
-    for (const part of parts) {
-      const m = part.match(/^<b>([^<]*)<\/b>$/);
-      if (m) {
-        txtEl.appendChild(mkEl('b', m[1]));
-      } else {
-        txtEl.appendChild(document.createTextNode(part));
-      }
-    }
+    appendRichText(txtEl, t.txt);
     row.appendChild(txtEl);
     section.appendChild(row);
   }

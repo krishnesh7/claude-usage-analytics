@@ -598,52 +598,42 @@ function computeFluency(byProject, byModel) {
   });
 }
 
+function fluencyScoreCls(s) { return s >= 70 ? 'ok' : s >= 40 ? 'warn' : 'red'; }
+
 function renderFluencyPanel(byProject, byModel) {
   const panel = $('#fluency-panel');
-  const container = $('#fluency-cards');
-  if (!container) return;
-  clearKids(container);
   const scored = computeFluency(byProject, byModel);
   if (!scored) { panel.style.display = 'none'; return; }
   panel.style.display = '';
+  rowCache['t-fluency'] = scored;
+  renderFluencyTable(scored);
+  renderFluencyRecs(scored);
+}
 
-  function scoreCls(s) { return s >= 70 ? 'ok' : s >= 40 ? 'warn' : 'red'; }
+function renderFluencyTable(scored) {
+  const tbody = $('#t-fluency tbody');
+  clearKids(tbody);
   const shortName = n => !n ? '(unknown)' : n.length > 22 ? n.slice(0, 21) + '…' : n;
-
-  for (const p of scored.slice(0, 6)) {
-    const card = document.createElement('div');
-    card.className = 'fluency-card';
-
-    const nameEl = mkEl('div', shortName(p.name), 'fluency-name');
-    nameEl.title = p.name;
-    card.appendChild(nameEl);
-
-    const badge = mkEl('div', String(p.composite), 'fluency-badge ' + scoreCls(p.composite));
-    badge.dataset.tip = 'Composite of the 4 axes below, as a percentile among your projects. Tells you which projects have the healthiest token usage patterns.';
-    card.appendChild(badge);
-
+  const rows = applySort('t-fluency', scored);
+  markSortHeader('t-fluency');
+  for (const p of rows.slice(0, 20)) {
+    const cls = fluencyScoreCls(p.composite);
+    const tr = mkRow([
+      { text: shortName(p.name), title: p.name },
+      { text: String(p.composite), cls: 'pct fluency-score ' + cls },
+    ]);
     for (const ax of p.axes) {
-      const axDiv = document.createElement('div');
-      axDiv.className = 'fluency-axis';
-      axDiv.dataset.tip = ax.tip;
-
-      const header = document.createElement('div');
-      header.className = 'fluency-axis-header';
-      header.appendChild(mkEl('span', ax.label, 'ax-label'));
-      header.appendChild(mkEl('span', String(ax.score), 'ax-score'));
-      axDiv.appendChild(header);
-
-      const track = document.createElement('div');
-      track.className = 'fluency-bar-track';
-      const fill = document.createElement('div');
-      fill.className = 'fluency-bar-fill ' + scoreCls(ax.score);
-      fill.style.width = ax.score + '%';
-      track.appendChild(fill);
-      axDiv.appendChild(track);
-
-      card.appendChild(axDiv);
+      const axCls = fluencyScoreCls(ax.score);
+      const td = document.createElement('td');
+      td.className = 'share-cell';
+      const bar = document.createElement('div');
+      bar.className = 'share-bar ' + axCls;
+      bar.style.width = ax.score + '%';
+      td.appendChild(bar);
+      td.appendChild(mkEl('span', String(ax.score), 'share-text pct ' + axCls));
+      tr.appendChild(td);
     }
-    container.appendChild(card);
+    tbody.appendChild(tr);
   }
 }
 

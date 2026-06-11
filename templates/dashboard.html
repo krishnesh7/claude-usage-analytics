@@ -984,7 +984,7 @@ function _sessionStats(sessions) {
   return { count, tokens, cost, costApi, costConservative, cacheHit };
 }
 
-function renderKindPanel(label, allSessions) {
+function renderKindPanel(breadcrumbSegments, allSessions) {
   const user = allSessions.filter(s => !s.parent_session_id);
   const subagent = allSessions.filter(s => !!s.parent_session_id);
 
@@ -1035,13 +1035,10 @@ function renderKindPanel(label, allSessions) {
     cards.appendChild(card);
   }
 
-  $('#drill-project-label-kind').textContent = label;
-  currentProjectLabel = label;
-  renderBreadcrumb([
-    { label: '~ overview', onClick: showOverview },
-    { label },
-  ]);
+  currentKindBreadcrumb = breadcrumbSegments;
+  renderBreadcrumb(breadcrumbSegments);
   $('#panel-overview').style.display = 'none';
+  $('#panel-stage').style.display = 'none';
   $('#panel-kind').style.display = 'block';
   $('#panel-sessions').style.display = 'none';
   renderCosts(activeCostMode);
@@ -1049,10 +1046,11 @@ function renderKindPanel(label, allSessions) {
 
 function drillIntoKind(kindLabel, kindSessions) {
   currentKindSessions = kindSessions;
-  const projectLabel = $('#drill-project-label-kind').textContent;
+  const prefix = currentKindBreadcrumb.slice(0, -1);
+  const last = currentKindBreadcrumb[currentKindBreadcrumb.length - 1];
   renderBreadcrumb([
-    { label: '~ overview', onClick: showOverview },
-    { label: projectLabel, onClick: showKindPanel },
+    ...prefix,
+    { label: last.label, onClick: showKindPanel },
     { label: kindLabel },
   ]);
   if ($('#f-session-search')) $('#f-session-search').value = '';
@@ -1179,16 +1177,25 @@ function showOverview() {
   renderAttributionPanel([]);
   $('#panel-sessions').style.display = 'none';
   $('#panel-kind').style.display = 'none';
+  $('#panel-stage').style.display = 'none';
   $('#panel-overview').style.display = '';
 }
 
 function showKindPanel() {
+  renderBreadcrumb(currentKindBreadcrumb);
+  $('#panel-sessions').style.display = 'none';
+  $('#panel-stage').style.display = 'none';
+  $('#panel-kind').style.display = 'block';
+}
+
+function showStagePanel() {
   renderBreadcrumb([
     { label: '~ overview', onClick: showOverview },
     { label: currentProjectLabel },
   ]);
   $('#panel-sessions').style.display = 'none';
-  $('#panel-kind').style.display = 'block';
+  $('#panel-kind').style.display = 'none';
+  $('#panel-stage').style.display = 'block';
 }
 
 $('#f-session-search') && $('#f-session-search').addEventListener('input', () => renderSessions(currentKindSessions));

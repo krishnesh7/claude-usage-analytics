@@ -282,6 +282,7 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
     by_project = []
     if not project:
         by_project = dbmod.totals_by_project(since=since_dt, kind=kind, until=until_dt)
+        registry = projects_mod.load_all()
         for r in by_project[:30]:
             lookup_key = r.get("project_name") or r.get("project_path", "")
             per_model = dbmod.turns_by_model(project=lookup_key, since=since_dt, until=until_dt)
@@ -297,6 +298,7 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
             r["pct_of_total"] = (100.0 * r["total_tokens"] / grand_total) if grand_total else 0.0
             r["cache_hit_rate"] = _cache_hit_rate(r)
             r["label"] = _project_label(r)
+            r["description"] = _project_description(r, registry)
         by_project = _collapse_project_rows(by_project[:30], grand_total)
 
     by_agent_type = dbmod.totals_by_agent_type(project=project, since=since_dt, kind=kind, until=until_dt)

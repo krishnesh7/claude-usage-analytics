@@ -59,3 +59,47 @@ def test_project_description_none_for_unregistered_or_path_rows():
     registry = {}
     assert _project_description({"project_path": "/some/path"}, registry) is None
     assert _project_description({"project_name": "unknown"}, registry) is None
+
+
+import sqlite3
+
+from claude_usage._view import build
+
+
+def _insert_turn(db_path, session_id, project_name, ts, model):
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT OR IGNORE INTO sessions(session_id, project_name, started_at) VALUES (?,?,?)",
+        (session_id, project_name, ts),
+    )
+    conn.execute(
+        """INSERT INTO turns(session_id, ts, model, input_tokens, output_tokens,
+             cache_creation_tokens, cache_read_tokens)
+           VALUES (?,?,?,?,?,?,?)""",
+        (session_id, ts, model, 1000, 200, 800, 3000),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_build_by_project_includes_description(db, tmp_path, monkeypatch):
+    monkeypatch.setattr(projects_mod, "PROJECTS_PATH", tmp_path / "projects.json")
+    projects_mod.init_project("alpha", tmp_path / "alpha-root", notes="Test description")
+
+    _insert_turn(db, "s1", "alpha", "2026-06-01T10:00:00", "claude-sonnet-4-6")
+
+    result = build(project=None, since="all", kind=None)
+    rows = [r for r in result["by_project"] if r.get("project_name") == "alpha"]
+    assert len(rows) == 1
+    assert rows[0]["description"] == "Test description"
+
+
+def test_build_by_project_description_none_when_unregistered(db, tmp_path, monkeypatch):
+    monkeypatch.setattr(projects_mod, "PROJECTS_PATH", tmp_path / "projects.json")
+
+    _insert_turn(db, "s2", "unregistered-proj", "2026-06-01T10:00:00", "claude-sonnet-4-6")
+
+    result = build(project=None, since="all", kind=None)
+    rows = [r for r in result["by_project"] if r.get("project_name") == "unregistered-proj"]
+    assert len(rows) == 1
+    assert rows[0]["description"] is None

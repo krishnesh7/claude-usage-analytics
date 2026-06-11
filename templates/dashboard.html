@@ -48,9 +48,9 @@
   th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; }
   th { color: var(--dim); font-weight: 500; font-size: 11px; letter-spacing: 0.4px; }
   th:first-child, td:first-child { text-align: left; overflow: hidden; text-overflow: ellipsis; }
-  #t-project col.c-name, #t-stage col.c-name, #t-agent col.c-name, #t-sessions col.c-name { width: auto; }
-  #t-project col.c-num, #t-stage col.c-num, #t-agent col.c-num, #t-sessions col.c-num { width: 78px; }
-  #t-project col.c-pct, #t-stage col.c-pct { width: 56px; }
+  #t-project col.c-name, #t-stage col.c-name, #t-project-stage col.c-name, #t-agent col.c-name, #t-sessions col.c-name { width: auto; }
+  #t-project col.c-num, #t-stage col.c-num, #t-project-stage col.c-num, #t-agent col.c-num, #t-sessions col.c-num { width: 78px; }
+  #t-project col.c-pct, #t-stage col.c-pct, #t-project-stage col.c-pct { width: 56px; }
   #t-project col.c-delta { width: 78px; }
   tr:hover td { background: rgba(255,255,255,0.025); }
   tr.clickable { cursor: pointer; }
@@ -90,26 +90,10 @@
   .session-sub-id { color: var(--blue); font-size: 10px; letter-spacing: 0.3px; }
   .hint { color: var(--dim); font-size: 11px; margin: 4px 0 6px; }
   /* Fluency panel */
-  .fluency-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
-  .fluency-card {
-    background: rgba(255,255,255,0.03); border: 1px solid var(--outline);
-    border-radius: 6px; padding: 14px 16px; min-width: 180px; flex: 1 1 180px; max-width: 240px;
-  }
-  .fluency-name { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; margin-bottom: 8px; }
-  .fluency-badge { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
-  .fluency-badge.ok   { color: var(--green); }
-  .fluency-badge.warn { color: var(--yellow); }
-  .fluency-badge.red  { color: var(--red); }
-  .fluency-axis { margin-bottom: 6px; }
-  .fluency-axis-header { display: flex; justify-content: space-between;
-    font-size: 10px; color: var(--dim); margin-bottom: 2px; }
-  .fluency-axis-header .ax-score { font-weight: 600; }
-  .fluency-bar-track { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; }
-  .fluency-bar-fill  { height: 4px; border-radius: 2px; transition: width 0.3s; }
-  .fluency-bar-fill.ok   { background: var(--green); }
-  .fluency-bar-fill.warn { background: var(--yellow); }
-  .fluency-bar-fill.red  { background: var(--red); }
+  .fluency-score { font-weight: 700; }
+  .fluency-rec { border-left: 3px solid var(--red); padding: 6px 10px; margin-bottom: 6px;
+    background: rgba(255,107,128,0.06); font-size: 12px; line-height: 1.4; }
+  .fluency-rec a { color: var(--blue); display: inline-block; margin-top: 4px; }
   #panel-sessions { display: none; }
   #panel-kind { display: none; }
   .kind-cards { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
@@ -156,6 +140,9 @@
   /* ── Inline share bar ── */
   .share-cell { position: relative; overflow: hidden; }
   .share-bar { position: absolute; top: 0; left: 0; height: 100%; background: rgba(100,160,255,0.10); pointer-events: none; }
+  .share-bar.ok   { background: rgba(78,186,101,0.18); }
+  .share-bar.warn { background: rgba(255,193,7,0.18); }
+  .share-bar.red  { background: rgba(255,107,128,0.18); }
   .share-text { position: relative; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -205,9 +192,23 @@
       </div>
 
       <div id="fluency-panel" style="display:none">
-        <h2>fluency <span class="sub" style="font-size:12px;font-weight:400;color:var(--dim);margin-left:8px">token efficiency by project</span></h2>
+        <h2>by fluency <span class="sub" style="font-size:12px;font-weight:400;color:var(--dim);margin-left:8px">token efficiency by project</span></h2>
         <p class="hint">Percentile scores within your projects. Higher = more efficient.</p>
-        <div id="fluency-cards" class="fluency-row"></div>
+        <table id="t-fluency">
+          <colgroup>
+            <col class="c-name"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct">
+          </colgroup>
+          <thead><tr>
+            <th>project</th>
+            <th data-tip="Composite of the 4 axes below, as a percentile among your projects. Tells you which projects have the healthiest token usage patterns.">fluency</th>
+            <th data-tip="% of input-side tokens served from cache. High = you reuse context well instead of re-sending it fresh.">cache hygiene</th>
+            <th data-tip="Ratio of cache reads to cache writes. High = your cached prompts got reused many times; low = cache was written but rarely read back.">cache payback</th>
+            <th data-tip="How much of your token spend used lighter models (Sonnet/Haiku) vs Opus. Scored globally across all projects in v1.">model fit</th>
+            <th data-tip="Your cost per turn relative to your other projects. High = efficient spend per interaction.">cost economy</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="fluency-recs"></div>
       </div>
 
       <h2 id="h-project">by project</h2>
@@ -281,9 +282,29 @@
       </table>
     </div>
 
+    <!-- Project SDLC-stage panel -->
+    <div id="panel-stage" style="display:none">
+      <h2>by stage</h2>
+      <p class="hint">Click a row to see the user/subagent breakdown for that stage.</p>
+      <table id="t-project-stage">
+        <colgroup>
+          <col class="c-name"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-num"><col class="c-pct"><col class="c-pct">
+        </colgroup>
+        <thead><tr>
+          <th>stage</th>
+          <th data-tip="Number of conversation sessions">sess</th>
+          <th data-tip="Number of back-and-forth exchanges (user message + assistant response = 1 turn)">turns</th>
+          <th data-tip="Total tokens consumed (input + cache creation + cache read + output)">tokens</th>
+          <th data-tip="Estimated cost under the selected pricing mode">cost</th>
+          <th data-tip="% of input-side tokens served from cache. Green ≥ 85%, yellow ≥ 50%, red < 50%.">cache·hit</th>
+          <th data-tip="This stage's share of this project's total tokens">%</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
     <!-- Kind selector panel (middle layer) -->
     <div id="panel-kind">
-      <span id="drill-project-label-kind" style="display:none"></span>
       <h2>session breakdown</h2>
       <div id="kind-cards" class="kind-cards"></div>
       <div id="attr-section" style="display:none;margin-top:20px">
@@ -421,6 +442,20 @@ function renderKpiCards(totals, prior) {
   }
 }
 
+// Append text to `el`, rendering any <b>...</b> spans as real <b> elements
+// without using innerHTML (avoids HTML injection from any embedded text).
+function appendRichText(el, text) {
+  const parts = text.split(/(<b>[^<]*<\/b>)/g);
+  for (const part of parts) {
+    const m = part.match(/^<b>([^<]*)<\/b>$/);
+    if (m) {
+      el.appendChild(mkEl('b', m[1]));
+    } else {
+      el.appendChild(document.createTextNode(part));
+    }
+  }
+}
+
 function renderTakes(takes) {
   const section = $('#takes-section');
   clearKids(section);
@@ -432,16 +467,7 @@ function renderTakes(takes) {
     row.style.borderLeftColor = borderColors[t.cls] || 'var(--dim)';
     row.appendChild(mkEl('span', t.fig, 'take-fig'));
     const txtEl = document.createElement('span');
-    // Parse <b>...</b> from server-generated text without using innerHTML
-    const parts = t.txt.split(/(<b>[^<]*<\/b>)/g);
-    for (const part of parts) {
-      const m = part.match(/^<b>([^<]*)<\/b>$/);
-      if (m) {
-        txtEl.appendChild(mkEl('b', m[1]));
-      } else {
-        txtEl.appendChild(document.createTextNode(part));
-      }
-    }
+    appendRichText(txtEl, t.txt);
     row.appendChild(txtEl);
     section.appendChild(row);
   }
@@ -592,51 +618,113 @@ function computeFluency(byProject, byModel) {
   });
 }
 
+function fluencyScoreCls(s) { return s >= 70 ? 'ok' : s >= 40 ? 'warn' : 'red'; }
+
 function renderFluencyPanel(byProject, byModel) {
   const panel = $('#fluency-panel');
-  const container = $('#fluency-cards');
-  clearKids(container);
   const scored = computeFluency(byProject, byModel);
   if (!scored) { panel.style.display = 'none'; return; }
   panel.style.display = '';
+  rowCache['t-fluency'] = scored;
+  renderFluencyTable(scored);
+  renderFluencyRecs(scored);
+}
 
-  function scoreCls(s) { return s >= 70 ? 'ok' : s >= 40 ? 'warn' : 'red'; }
+function renderFluencyTable(scored) {
+  const tbody = $('#t-fluency tbody');
+  clearKids(tbody);
   const shortName = n => !n ? '(unknown)' : n.length > 22 ? n.slice(0, 21) + '…' : n;
-
-  for (const p of scored.slice(0, 6)) {
-    const card = document.createElement('div');
-    card.className = 'fluency-card';
-
-    const nameEl = mkEl('div', shortName(p.name), 'fluency-name');
-    nameEl.title = p.name;
-    card.appendChild(nameEl);
-
-    const badge = mkEl('div', String(p.composite), 'fluency-badge ' + scoreCls(p.composite));
-    badge.dataset.tip = 'Composite of the 4 axes below, as a percentile among your projects. Tells you which projects have the healthiest token usage patterns.';
-    card.appendChild(badge);
-
+  const rows = applySort('t-fluency', scored);
+  markSortHeader('t-fluency');
+  for (const p of rows.slice(0, 20)) {
+    const cls = fluencyScoreCls(p.composite);
+    const tr = mkRow([
+      { text: shortName(p.name), title: p.name },
+      { text: String(p.composite), cls: 'pct fluency-score ' + cls },
+    ]);
     for (const ax of p.axes) {
-      const axDiv = document.createElement('div');
-      axDiv.className = 'fluency-axis';
-      axDiv.dataset.tip = ax.tip;
-
-      const header = document.createElement('div');
-      header.className = 'fluency-axis-header';
-      header.appendChild(mkEl('span', ax.label, 'ax-label'));
-      header.appendChild(mkEl('span', String(ax.score), 'ax-score'));
-      axDiv.appendChild(header);
-
-      const track = document.createElement('div');
-      track.className = 'fluency-bar-track';
-      const fill = document.createElement('div');
-      fill.className = 'fluency-bar-fill ' + scoreCls(ax.score);
-      fill.style.width = ax.score + '%';
-      track.appendChild(fill);
-      axDiv.appendChild(track);
-
-      card.appendChild(axDiv);
+      const axCls = fluencyScoreCls(ax.score);
+      const td = document.createElement('td');
+      td.className = 'share-cell';
+      const bar = document.createElement('div');
+      bar.className = 'share-bar ' + axCls;
+      bar.style.width = ax.score + '%';
+      td.appendChild(bar);
+      td.appendChild(mkEl('span', String(ax.score), 'share-text pct ' + axCls));
+      tr.appendChild(td);
     }
-    container.appendChild(card);
+    tbody.appendChild(tr);
+  }
+}
+
+const FLUENCY_REC_INFO = {
+  'Cache Hygiene': {
+    text: score => `Cache Hygiene is <b>${score}</b> (lowest of your projects). Most input tokens are sent fresh rather than reused from cache. Try keeping a stable prompt prefix so Claude can cache more context.`,
+    href: 'https://docs.claude.com/en/docs/build-with-claude/prompt-caching',
+    title: 'Prompt Caching',
+  },
+  'Cache Payback': {
+    text: score => `Cache Payback is <b>${score}</b>. Your cached prompts were written but rarely reused — consider whether the cached context is still relevant across turns.`,
+    href: 'https://docs.claude.com/en/docs/build-with-claude/prompt-caching',
+    title: 'Prompt Caching',
+  },
+  'Model Fit (global)': {
+    text: score => `Model Fit is <b>${score}</b> (global). A meaningful share of tokens go to Opus-tier models — consider Sonnet or Haiku for routine work.`,
+    href: 'https://docs.claude.com/en/docs/about-claude/models/choosing-a-model',
+    title: 'Choosing a model',
+  },
+  'Cost Economy': {
+    text: score => `Cost Economy is <b>${score}</b>. Cost-per-turn here is higher than your other projects — check for redundant context or heavy subagent fan-out.`,
+    href: 'https://docs.claude.com/en/docs/about-claude/pricing',
+    title: 'Pricing & cost optimization',
+  },
+};
+
+function renderFluencyRecs(scored) {
+  const container = $('#fluency-recs');
+  clearKids(container);
+
+  // 1. Find each project's worst-scoring axis (ties broken by axis order,
+  //    since p.axes is always [Cache Hygiene, Cache Payback, Model Fit, Cost Economy]).
+  const candidates = [];
+  for (const p of scored) {
+    let worst = p.axes[0];
+    for (const ax of p.axes) {
+      if (ax.score < worst.score) worst = ax;
+    }
+    if (worst.score < 40) {
+      candidates.push({ project: p.name, axis: worst.label, score: worst.score });
+    }
+  }
+
+  // 2. Model Fit (global) is identical across projects — collapse all
+  //    occurrences into a single "all projects" entry.
+  const modelFit = candidates.filter(c => c.axis === 'Model Fit (global)');
+  const deduped = candidates.filter(c => c.axis !== 'Model Fit (global)');
+  if (modelFit.length > 0) {
+    deduped.push({ project: 'all projects', axis: 'Model Fit (global)', score: modelFit[0].score });
+  }
+
+  // 3. Worst first, cap at 3.
+  deduped.sort((a, b) => a.score - b.score);
+
+  for (const c of deduped.slice(0, 3)) {
+    const info = FLUENCY_REC_INFO[c.axis];
+    const row = document.createElement('div');
+    row.className = 'fluency-rec';
+
+    const textEl = document.createElement('div');
+    appendRichText(textEl, `<b>${c.project}</b> — ${info.text(c.score)}`);
+    row.appendChild(textEl);
+
+    const link = document.createElement('a');
+    link.href = info.href;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'Learn more: ' + info.title + ' →';
+    row.appendChild(link);
+
+    container.appendChild(row);
   }
 }
 
@@ -660,6 +748,28 @@ function renderStageTable(rows) {
     tr.addEventListener('click', () => toggleBreakdown(tr, 'stage', r.stage, 7));
     tbody.appendChild(tr);
   }
+}
+
+function renderProjectStageTable(rows) {
+  const tbody = $('#t-project-stage tbody');
+  clearKids(tbody);
+  for (const r of rows) {
+    const totalTokens = (r.input_tokens || 0) + (r.cache_creation_tokens || 0)
+                      + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
+    const tr = mkRow([
+      r.stage, r.sessions, r.turns,
+      fmt(totalTokens),
+      { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
+        costApi: r.cost_api ?? r.cost?.total_usd ?? 0,
+        costConservative: r.cost_conservative ?? r.cost?.total_usd ?? 0,
+        costSubscription: r.cost_subscription ?? r.cost?.total_usd ?? 0 },
+      fmtCacheHit(r.cache_hit_rate),
+      { text: (r.pct_of_total ?? 0).toFixed(1) + '%', cls: 'pct' },
+    ], 'clickable');
+    tr.addEventListener('click', () => drillIntoStage(r.stage));
+    tbody.appendChild(tr);
+  }
+  renderCosts(activeCostMode);
 }
 
 function renderProjectTable(rows, priorRows) {
@@ -856,6 +966,8 @@ async function toggleBreakdown(parentTr, dim, key, colspan) {
 let currentSessions = [];
 let currentKindSessions = [];  // sessions for the currently-selected kind
 let currentProjectLabel = '';
+let currentProjectKey = '';
+let currentKindBreadcrumb = [];
 
 function _sessionStats(sessions) {
   const count = sessions.length;
@@ -870,7 +982,7 @@ function _sessionStats(sessions) {
   return { count, tokens, cost, costApi, costConservative, cacheHit };
 }
 
-function renderKindPanel(label, allSessions) {
+function renderKindPanel(breadcrumbSegments, allSessions) {
   const user = allSessions.filter(s => !s.parent_session_id);
   const subagent = allSessions.filter(s => !!s.parent_session_id);
 
@@ -921,13 +1033,10 @@ function renderKindPanel(label, allSessions) {
     cards.appendChild(card);
   }
 
-  $('#drill-project-label-kind').textContent = label;
-  currentProjectLabel = label;
-  renderBreadcrumb([
-    { label: '~ overview', onClick: showOverview },
-    { label },
-  ]);
+  currentKindBreadcrumb = breadcrumbSegments;
+  renderBreadcrumb(breadcrumbSegments);
   $('#panel-overview').style.display = 'none';
+  $('#panel-stage').style.display = 'none';
   $('#panel-kind').style.display = 'block';
   $('#panel-sessions').style.display = 'none';
   renderCosts(activeCostMode);
@@ -935,10 +1044,11 @@ function renderKindPanel(label, allSessions) {
 
 function drillIntoKind(kindLabel, kindSessions) {
   currentKindSessions = kindSessions;
-  const projectLabel = $('#drill-project-label-kind').textContent;
+  const prefix = currentKindBreadcrumb.slice(0, -1);
+  const last = currentKindBreadcrumb[currentKindBreadcrumb.length - 1];
   renderBreadcrumb([
-    { label: '~ overview', onClick: showOverview },
-    { label: projectLabel, onClick: showKindPanel },
+    ...prefix,
+    { label: last.label, onClick: showKindPanel },
     { label: kindLabel },
   ]);
   if ($('#f-session-search')) $('#f-session-search').value = '';
@@ -1020,35 +1130,44 @@ function renderAttributionPanel(rows) {
   }
 }
 
-async function drillIntoProject(label, projectKey) {
+function sinceUntilQuery() {
   const from = $('#f-from').value;
   const to = $('#f-to').value;
+  if (activePreset === 'all') return '&since=all';
+  const sp = exactSince || from;
+  const up = exactUntil || to;
+  let q = '';
+  if (sp) q += '&since=' + encodeURIComponent(sp);
+  if (up) q += '&until=' + encodeURIComponent(up);
+  return q;
+}
+
+function sessionsUrl(projectKey, stage) {
+  let url = '/api/sessions?project=' + encodeURIComponent(projectKey);
+  if (stage) url += '&stage=' + encodeURIComponent(stage);
+  const kind = $('#f-kind') ? $('#f-kind').value : 'user';
+  if (kind && kind !== 'all') url += '&kind=' + encodeURIComponent(kind);
+  return url + sinceUntilQuery();
+}
+
+async function loadKindPanel(breadcrumbSegments, sesUrl) {
   // Show loading state in the kind panel while fetching
-  $('#drill-project-label-kind').textContent = label;
   clearKids($('#kind-cards'));
   const loadEl = document.createElement('div');
   loadEl.style.cssText = 'color:var(--dim);font-size:11px;margin-top:10px';
   loadEl.textContent = 'loading…';
   $('#kind-cards').appendChild(loadEl);
   $('#panel-overview').style.display = 'none';
+  $('#panel-stage').style.display = 'none';
   $('#panel-kind').style.display = 'block';
   $('#panel-sessions').style.display = 'none';
 
   try {
-    let sesUrl = '/api/sessions?project=' + encodeURIComponent(projectKey);
-    if (activePreset === 'all') {
-      sesUrl += '&since=all';
-    } else {
-      const sp = exactSince || from;
-      const up = exactUntil || to;
-      if (sp) sesUrl += '&since=' + encodeURIComponent(sp);
-      if (up) sesUrl += '&until=' + encodeURIComponent(up);
-    }
-    const attrUrl = '/api/attribution?project=' + encodeURIComponent(projectKey);
+    const attrUrl = '/api/attribution?project=' + encodeURIComponent(currentProjectKey);
     const [sesResp, attrResp] = await Promise.all([fetch(sesUrl), fetch(attrUrl)]);
     const [d, attrD] = await Promise.all([sesResp.json(), attrResp.json()]);
     currentSessions = d.sessions || [];
-    renderKindPanel(label, currentSessions);
+    renderKindPanel(breadcrumbSegments, currentSessions);
     renderAttributionPanel(attrD.attribution || []);
   } catch(e) {
     renderAttributionPanel([]);
@@ -1060,21 +1179,74 @@ async function drillIntoProject(label, projectKey) {
   }
 }
 
+async function drillIntoProject(label, projectKey) {
+  currentProjectKey = projectKey;
+  currentProjectLabel = label;
+  clearKids($('#t-project-stage tbody'));
+  $('#panel-overview').style.display = 'none';
+  $('#panel-stage').style.display = 'block';
+  $('#panel-kind').style.display = 'none';
+  $('#panel-sessions').style.display = 'none';
+  renderBreadcrumb([
+    { label: '~ overview', onClick: showOverview },
+    { label },
+  ]);
+
+  let byStage = [];
+  try {
+    const sumResp = await fetch('/api/summary?project=' + encodeURIComponent(projectKey) + '&kind=all' + sinceUntilQuery());
+    const sumD = await sumResp.json();
+    byStage = sumD.by_stage || [];
+  } catch (e) {
+    byStage = [];
+  }
+
+  if (byStage.length === 0) {
+    await loadKindPanel(
+      [{ label: '~ overview', onClick: showOverview }, { label }],
+      sessionsUrl(projectKey, null),
+    );
+    return;
+  }
+
+  renderProjectStageTable(byStage);
+}
+
+function drillIntoStage(stage) {
+  loadKindPanel(
+    [
+      { label: '~ overview', onClick: showOverview },
+      { label: currentProjectLabel, onClick: showStagePanel },
+      { label: stage },
+    ],
+    sessionsUrl(currentProjectKey, stage),
+  );
+}
+
 function showOverview() {
   renderBreadcrumb([{ label: '~ overview' }]);
   renderAttributionPanel([]);
   $('#panel-sessions').style.display = 'none';
   $('#panel-kind').style.display = 'none';
+  $('#panel-stage').style.display = 'none';
   $('#panel-overview').style.display = '';
 }
 
 function showKindPanel() {
+  renderBreadcrumb(currentKindBreadcrumb);
+  $('#panel-sessions').style.display = 'none';
+  $('#panel-stage').style.display = 'none';
+  $('#panel-kind').style.display = 'block';
+}
+
+function showStagePanel() {
   renderBreadcrumb([
     { label: '~ overview', onClick: showOverview },
     { label: currentProjectLabel },
   ]);
   $('#panel-sessions').style.display = 'none';
-  $('#panel-kind').style.display = 'block';
+  $('#panel-kind').style.display = 'none';
+  $('#panel-stage').style.display = 'block';
 }
 
 $('#f-session-search') && $('#f-session-search').addEventListener('input', () => renderSessions(currentKindSessions));
@@ -1427,6 +1599,15 @@ enableSort('t-model', {
   3: r => r.cache_read_tokens, 4: r => r.output_tokens,
   5: r => r.cost?.total_usd ?? 0, 6: r => r.cache_hit_rate ?? -1,
 }, renderModelTable);
+
+enableSort('t-fluency', {
+  0: r => r.name || '',
+  1: r => r.composite,
+  2: r => r.axes[0].score,
+  3: r => r.axes[1].score,
+  4: r => r.axes[2].score,
+  5: r => r.axes[3].score,
+}, renderFluencyTable);
 
 $('#refresh').addEventListener('click', load);
 $('#f-project').addEventListener('change', load);

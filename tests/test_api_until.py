@@ -114,6 +114,45 @@ def test_sessions_until_filters(tmp_path, monkeypatch):
     assert "a2" not in ids
 
 
+def test_sessions_stage_param_filters(tmp_path, monkeypatch):
+    db_path = tmp_path / "test.db"
+    _seed(db_path)
+    conn = _sqlite3.connect(str(db_path))
+    conn.execute("INSERT INTO session_stage(session_id, stage, source) VALUES ('a1','build','classifier')")
+    conn.execute("INSERT INTO session_stage(session_id, stage, source) VALUES ('a2','fix','classifier')")
+    conn.commit()
+    conn.close()
+    client = _get_client(monkeypatch, db_path)
+    resp = client.get("/api/sessions?project=alpha&stage=build")
+    assert resp.status_code == 200
+    ids = [s["session_id"] for s in resp.json()["sessions"]]
+    assert ids == ["a1"]
+
+
+def test_sessions_kind_param_filters_subagent(tmp_path, monkeypatch):
+    db_path = tmp_path / "test.db"
+    _seed(db_path)
+    conn = _sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO sessions(session_id, project_name, parent_session_id, started_at) "
+        "VALUES ('a1::agent-x','alpha','a1','2026-05-20T10:05:00')"
+    )
+    conn.commit()
+    conn.close()
+    client = _get_client(monkeypatch, db_path)
+
+    resp_user = client.get("/api/sessions?project=alpha&kind=user")
+    assert resp_user.status_code == 200
+    ids_user = {s["session_id"] for s in resp_user.json()["sessions"]}
+    assert "a1::agent-x" not in ids_user
+    assert "a1" in ids_user
+
+    resp_subagent = client.get("/api/sessions?project=alpha&kind=subagent")
+    assert resp_subagent.status_code == 200
+    ids_subagent = {s["session_id"] for s in resp_subagent.json()["sessions"]}
+    assert ids_subagent == {"a1::agent-x"}
+
+
 def test_attribution_endpoint_returns_data(tmp_path, monkeypatch):
     _seed(tmp_path / "test.db")
     client = _get_client(monkeypatch, tmp_path / "test.db")

@@ -24,6 +24,9 @@ report on token usage. That's where the similarity ends.
 | **Live dashboard** | ❌ | ✅ `cu serve` → localhost:7777 |
 | **6-tier session confidence resolver** | ❌ | ✅ EXACT / SUBDIR / WORKTREE / FUZZY / AMBIGUOUS / UNMATCHED |
 | **Git worktree consolidation** | ❌ | ✅ worktree sessions roll up to parent project |
+| **Cost-mode toggle (API/Conservative/Subscription)** | ❌ | ✅ with auto-detected default per your plan |
+| **Fluency / efficiency scoring** | ❌ | ✅ 4-axis percentile scoring + recommendations per project |
+| **Drill-down navigation (project → stage → session)** | ❌ | ✅ breadcrumb nav in the dashboard |
 
 ---
 
@@ -143,6 +146,38 @@ is **storing the results permanently** so they survive past the 7-day window
 and can be filtered by named project.
 
 ---
+
+### Fluency scoring — efficiency, not just spend
+
+session-report (and raw token totals generally) tell you *how much* you spent.
+Neither tells you whether that spend was *efficient*.
+
+claude-usage-tracker's fluency panel scores each project on four axes, each a
+percentile rank against your other projects:
+
+- **Cache Hygiene** — % of input-side tokens served from cache vs sent fresh
+- **Cache Payback** — ratio of cache reads to cache writes (did cached prompts get reused?)
+- **Model Fit** — how much spend used lighter models (Sonnet/Haiku) vs Opus
+- **Cost Economy** — cost per turn relative to your other projects
+
+Each axis renders as a share-bar with threshold coloring, and projects with
+weak axes get a plain-language recommendation (e.g. "Cache Hygiene is low —
+most input tokens are sent fresh rather than reused").
+
+### Cost modes — pick the price that matches your plan
+
+Token costs only mean something relative to what you actually pay.
+claude-usage-tracker computes three cost modes from the same raw token data:
+
+| Mode | Assumption |
+|---|---|
+| **API** | Pay-per-token at list price — accurate if you call the API directly |
+| **Conservative** | Blended rate assuming ~50% cache savings — a middle-ground estimate |
+| **Subscription** | Imputed cost against your subscription plan's token allowance |
+
+`/api/plan-hint` auto-detects which mode matches your plan and pre-selects it
+on first load (with a badge showing the detected plan); switching modes
+re-renders every cost figure in the dashboard, including the trend chart.
 
 ## When to use which
 

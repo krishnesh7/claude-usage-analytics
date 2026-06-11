@@ -110,9 +110,14 @@ cu serve --port 8888   # custom port
 
 Open **http://localhost:7777** in any browser. The dashboard shows:
 
-- Token + cost totals across all projects, filterable by time window
-- Per-project spend breakdown
+- Token + cost totals across all projects, filterable by time window and session kind
+- A **cost-mode toggle** (API / Conservative / Subscription) that re-prices every
+  figure on the page; the dashboard auto-detects which mode matches your plan
+- A **fluency panel** scoring each project on Cache Hygiene, Cache Payback,
+  Model Fit, and Cost Economy, with recommendations for weak spots
+- Per-project spend breakdown with **drill-down** into stage → user/subagent → sessions
 - SDLC stage distribution (impl vs test vs adhoc etc.)
+- Hover tooltips on key metrics explaining what each number means
 - Auto-refreshes every 30 seconds — leave it open while you work
 
 Stop it with **Ctrl+C** in the terminal when done.

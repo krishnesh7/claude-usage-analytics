@@ -9,6 +9,10 @@ and there's near-zero LLM overhead (the parser is pure code).
 ## What it tracks
 
 - Token usage and imputed API-equivalent **$ cost** per project, SDLC stage, and model
+- **Cost modes** — toggle between API (pay-per-token), Conservative (blended cache estimate),
+  and Subscription (flat-plan imputed) pricing, with auto-detected default based on your plan
+- **Fluency scoring** — per-project efficiency across 4 axes (Cache Hygiene, Cache Payback,
+  Model Fit, Cost Economy) with percentile ranks and actionable recommendations
 - **Session-kind** split (user vs subagent vs tracker) so totals aren't double-counted
 - **Cache-hit rate** per project / stage / model
 - Per-day stacked **trend chart** (user vs subagent)
@@ -69,7 +73,9 @@ cu serve            # http://localhost:7777, auto-refreshes every 30s
 
 While serving, a background loop re-parses every 60s so in-flight sessions
 appear without a manual refresh. The dashboard has time + kind filters,
-sortable tables, per-session drill-down, and session search.
+sortable tables, a fluency panel with per-project efficiency scores and
+recommendations, project → stage → session drill-down navigation with
+breadcrumbs, hover tooltips on key metrics, and session search.
 
 ## Configuration
 

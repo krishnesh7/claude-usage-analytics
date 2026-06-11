@@ -208,7 +208,6 @@ def sessions_for_project(
     stage: str | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
-    kind: str | None = None,
     limit: int = 200,
 ) -> list[dict]:
     """Return root sessions for a project plus their subagent children, newest first.
@@ -216,9 +215,6 @@ def sessions_for_project(
     Each row is tagged with an effective `stage`: a root session's own stage
     (or 'unclassified' if it has none), or its parent's effective stage for a
     subagent child — the same inheritance rule used by totals_by_stage().
-
-    kind ∈ {'user', 'subagent', 'tracker', 'all', None} filters the returned
-    session rows using the same semantics as _where_clauses().
     """
     sql = """
         WITH matched_roots AS (
@@ -264,9 +260,6 @@ def sessions_for_project(
     if until:
         sql += " AND s.started_at <= ?"
         params.append(until.isoformat())
-    cond = _kind_condition(kind)
-    if cond:
-        sql += f" AND {cond}"
     sql += " GROUP BY s.session_id ORDER BY s.started_at DESC LIMIT ?"
     params.append(limit)
     with connect() as c:
@@ -276,14 +269,9 @@ def sessions_for_project(
 def sessions_for_system_ops(
     since: datetime | None = None,
     until: datetime | None = None,
-    kind: str | None = None,
     limit: int = 200,
 ) -> list[dict]:
-    """Return sessions from system temp directories (plugin/automation sessions).
-
-    kind ∈ {'user', 'subagent', 'tracker', 'all', None} filters the returned
-    session rows using the same semantics as _where_clauses().
-    """
+    """Return sessions from system temp directories (plugin/automation sessions)."""
     sys_prefixes = ("/private/tmp", "/tmp", "/private/var/folders/", "/var/folders/")
     conditions = " OR ".join("s.project_path LIKE ?" for _ in sys_prefixes)
     sql = f"""
@@ -310,9 +298,6 @@ def sessions_for_system_ops(
     if until:
         sql += " AND s.started_at <= ?"
         params.append(until.isoformat())
-    cond = _kind_condition(kind)
-    if cond:
-        sql += f" AND {cond}"
     sql += " GROUP BY s.session_id ORDER BY s.started_at DESC LIMIT ?"
     params.append(limit)
     with connect() as c:

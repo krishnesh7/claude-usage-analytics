@@ -9,21 +9,20 @@ def _seed(db, sessions, stages=None, turns=None):
     """Insert sessions, optional stage rows, optional turn rows.
 
     sessions: list of dicts with keys: session_id, project_name (opt),
-              parent_session_id (opt), started_at (opt), is_tracker_overhead (opt)
+              parent_session_id (opt), started_at (opt)
     stages:   list of (session_id, stage)
     turns:    list of (session_id, input_tokens)
     """
     conn = _sql.connect(str(db))
     for s in sessions:
         conn.execute(
-            "INSERT INTO sessions(session_id, project_name, parent_session_id, started_at, is_tracker_overhead) "
-            "VALUES (:session_id, :project_name, :parent_session_id, :started_at, :is_tracker_overhead)",
+            "INSERT INTO sessions(session_id, project_name, parent_session_id, started_at) "
+            "VALUES (:session_id, :project_name, :parent_session_id, :started_at)",
             {
                 "session_id": s["session_id"],
                 "project_name": s.get("project_name", "myproj"),
                 "parent_session_id": s.get("parent_session_id"),
                 "started_at": s.get("started_at", "2026-06-01T00:00:00"),
-                "is_tracker_overhead": s.get("is_tracker_overhead", 0),
             },
         )
     for session_id, stage in (stages or []):
@@ -100,46 +99,6 @@ def test_child_tokens_counted_on_own_row(db):
     rows = {r["session_id"]: r for r in sessions_for_project("myproj")}
     assert rows["root1"]["input_tokens"] == 100
     assert rows["root1::agent-abc123"]["input_tokens"] == 400
-
-
-def test_kind_user_excludes_subagent_children(db):
-    _seed(db, [
-        {"session_id": "root1"},
-        {"session_id": "root1::agent-abc123", "parent_session_id": "root1"},
-    ], stages=[("root1", "build")])
-    rows = sessions_for_project("myproj", kind="user")
-    ids = {r["session_id"] for r in rows}
-    assert ids == {"root1"}
-
-
-def test_kind_subagent_returns_only_children(db):
-    _seed(db, [
-        {"session_id": "root1"},
-        {"session_id": "root1::agent-abc123", "parent_session_id": "root1"},
-    ], stages=[("root1", "build")])
-    rows = sessions_for_project("myproj", kind="subagent")
-    ids = {r["session_id"] for r in rows}
-    assert ids == {"root1::agent-abc123"}
-
-
-def test_kind_user_excludes_tracker_overhead(db):
-    _seed(db, [
-        {"session_id": "root1"},
-        {"session_id": "tracker1", "is_tracker_overhead": 1},
-    ])
-    rows = sessions_for_project("myproj", kind="user")
-    ids = {r["session_id"] for r in rows}
-    assert ids == {"root1"}
-
-
-def test_kind_tracker_returns_only_overhead_sessions(db):
-    _seed(db, [
-        {"session_id": "root1"},
-        {"session_id": "tracker1", "is_tracker_overhead": 1},
-    ])
-    rows = sessions_for_project("myproj", kind="tracker")
-    ids = {r["session_id"] for r in rows}
-    assert ids == {"tracker1"}
 
 
 def test_until_excludes_later_sessions(db):

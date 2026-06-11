@@ -569,6 +569,20 @@ function modelTip(model) {
   return 'Claude model used for this work.';
 }
 
+const STAGE_TIPS = {
+  requirements: 'Defining what to build — specs, user stories, requirements docs, roadmaps.',
+  design: 'Architecture and design work — system design, data models, diagrams, tradeoffs.',
+  test: 'Writing or running tests — unit, integration, e2e, TDD.',
+  deploy: 'Shipping and operating — CI/CD, releases, deployments, infrastructure changes.',
+  explore: 'Research and Q&A — understanding how something works, without building yet.',
+  impl: 'Building and fixing — implementing features, fixing bugs, refactoring code.',
+  adhoc: "Catch-all — sessions that didn't clearly match another stage.",
+  _tracker_overhead_: "Internal usage-analytics tooling overhead (this dashboard's own sessions).",
+};
+function stageTip(stage) {
+  return STAGE_TIPS[stage] || "SDLC stage classified from the session's first message.";
+}
+
 function computeFluency(byProject, byModel) {
   if (!byProject || byProject.length < 2) return null;
 
@@ -746,7 +760,7 @@ function renderStageTable(rows) {
     const totalTokens = (r.input_tokens || 0) + (r.cache_creation_tokens || 0)
                       + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
     const tr = mkRow([
-      r.stage, r.sessions, r.turns,
+      { text: r.stage, tip: stageTip(r.stage) }, r.sessions, r.turns,
       fmt(totalTokens),
       { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
         costApi: r.cost_api ?? r.cost?.total_usd ?? 0,
@@ -768,7 +782,7 @@ function renderProjectStageTable(rows) {
     const totalTokens = (r.input_tokens || 0) + (r.cache_creation_tokens || 0)
                       + (r.cache_read_tokens || 0) + (r.output_tokens || 0);
     const tr = mkRow([
-      r.stage, r.sessions, r.turns,
+      { text: r.stage, tip: stageTip(r.stage) }, r.sessions, r.turns,
       fmt(totalTokens),
       { text: '$' + (r.cost_subscription ?? r.cost?.total_usd ?? 0).toFixed(2),
         costApi: r.cost_api ?? r.cost?.total_usd ?? 0,

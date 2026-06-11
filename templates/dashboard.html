@@ -639,8 +639,9 @@ function renderFluencyTable(scored) {
   markSortHeader('t-fluency');
   for (const p of rows.slice(0, 20)) {
     const cls = fluencyScoreCls(p.composite);
+    const tip = p.r.description || (p.name && p.name.length > 22 ? p.name : '');
     const tr = mkRow([
-      { text: shortName(p.name), title: p.name },
+      { text: shortName(p.name), tip },
       { text: String(p.composite), cls: 'pct fluency-score ' + cls },
     ]);
     for (const ax of p.axes) {

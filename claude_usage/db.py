@@ -193,9 +193,29 @@ def totals_by_project(since: datetime | None = None, kind: str | None = None, un
         return [dict(r) for r in c.execute(sql, params)]
 
 
-def sessions_for_project(project: str, since: datetime | None = None, limit: int = 200, until: datetime | None = None) -> list[dict]:
-    """Return individual sessions for a named project, newest first."""
+def sessions_for_project(
+    project: str,
+    stage: str | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    """Return root sessions for a project plus their subagent children, newest first.
+
+    Each row is tagged with an effective `stage`: a root session's own stage
+    (or 'unclassified' if it has none), or its parent's effective stage for a
+    subagent child — the same inheritance rule used by totals_by_stage().
+    """
     sql = """
+        WITH matched_roots AS (
+          SELECT s.session_id AS session_id,
+                 COALESCE(ss.stage, 'unclassified') AS eff_stage
+          FROM sessions s
+          LEFT JOIN session_stage ss ON ss.session_id = s.session_id
+          WHERE (s.project_name = ? OR s.project_path LIKE ? OR s.project_dir LIKE ?)
+            AND s.parent_session_id IS NULL
+            AND s.session_id NOT LIKE '%::agent-%'
+        )
         SELECT
           s.session_id,
           s.project_name,
@@ -208,20 +228,22 @@ def sessions_for_project(project: str, since: datetime | None = None, limit: int
           s.agent_type,
           s.parent_session_id,
           s.subagent_description,
-          ss.stage AS stage,
+          mr.eff_stage AS stage,
           COUNT(t.id) AS turns,
           COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
           COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
           COALESCE(SUM(t.cache_read_tokens), 0) AS cache_read_tokens,
           COALESCE(SUM(t.output_tokens), 0) AS output_tokens
         FROM sessions s
+        JOIN matched_roots mr
+          ON s.session_id = mr.session_id OR s.parent_session_id = mr.session_id
         LEFT JOIN turns t ON t.session_id = s.session_id
-        LEFT JOIN session_stage ss ON ss.session_id = s.session_id
-        WHERE (s.project_name = ? OR s.project_path LIKE ? OR s.project_dir LIKE ?)
-          AND s.parent_session_id IS NULL
-          AND s.session_id NOT LIKE '%::agent-%'
+        WHERE 1=1
     """
     params: list = [project, f"%{project}%", f"%{project}%"]
+    if stage:
+        sql += " AND mr.eff_stage = ?"
+        params.append(stage)
     if since:
         sql += " AND s.started_at >= ?"
         params.append(since.isoformat())

@@ -1145,6 +1145,8 @@ function sinceUntilQuery() {
 function sessionsUrl(projectKey, stage) {
   let url = '/api/sessions?project=' + encodeURIComponent(projectKey);
   if (stage) url += '&stage=' + encodeURIComponent(stage);
+  const kind = $('#f-kind') ? $('#f-kind').value : 'user';
+  if (kind && kind !== 'all') url += '&kind=' + encodeURIComponent(kind);
   return url + sinceUntilQuery();
 }
 

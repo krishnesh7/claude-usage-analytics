@@ -73,6 +73,20 @@ class TurnTotals:
         )
 
 
+def _kind_condition(kind: str | None) -> str | None:
+    """Return a boolean SQL condition on session row `s` for the given kind, or None.
+
+    kind ∈ {'user', 'subagent', 'tracker', 'all', None}. 'all' or None means no filter.
+    """
+    if kind == "user":
+        return "(s.parent_session_id IS NULL AND s.session_id NOT LIKE '%::agent-%' AND COALESCE(s.is_tracker_overhead, 0) = 0)"
+    if kind == "subagent":
+        return "(s.parent_session_id IS NOT NULL OR s.session_id LIKE '%::agent-%')"
+    if kind == "tracker":
+        return "COALESCE(s.is_tracker_overhead, 0) = 1"
+    return None
+
+
 def _where_clauses(
     project: str | None,
     since: datetime | None,
@@ -103,13 +117,9 @@ def _where_clauses(
     if stage:
         where.append("ss.stage = ?")
         params.append(stage)
-    if kind == "user":
-        where.append("(s.parent_session_id IS NULL AND s.session_id NOT LIKE '%::agent-%' AND COALESCE(s.is_tracker_overhead, 0) = 0)")
-    elif kind == "subagent":
-        where.append("(s.parent_session_id IS NOT NULL OR s.session_id LIKE '%::agent-%')")
-    elif kind == "tracker":
-        where.append("COALESCE(s.is_tracker_overhead, 0) = 1")
-    # 'all' or None: no kind filter
+    cond = _kind_condition(kind)
+    if cond:
+        where.append(cond)
     clause = (" WHERE " + " AND ".join(where)) if where else ""
     return clause, params
 
@@ -198,6 +208,7 @@ def sessions_for_project(
     stage: str | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
+    kind: str | None = None,
     limit: int = 200,
 ) -> list[dict]:
     """Return root sessions for a project plus their subagent children, newest first.
@@ -205,6 +216,9 @@ def sessions_for_project(
     Each row is tagged with an effective `stage`: a root session's own stage
     (or 'unclassified' if it has none), or its parent's effective stage for a
     subagent child — the same inheritance rule used by totals_by_stage().
+
+    kind ∈ {'user', 'subagent', 'tracker', 'all', None} filters the returned
+    session rows using the same semantics as _where_clauses().
     """
     sql = """
         WITH matched_roots AS (
@@ -250,14 +264,26 @@ def sessions_for_project(
     if until:
         sql += " AND s.started_at <= ?"
         params.append(until.isoformat())
+    cond = _kind_condition(kind)
+    if cond:
+        sql += f" AND {cond}"
     sql += " GROUP BY s.session_id ORDER BY s.started_at DESC LIMIT ?"
     params.append(limit)
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]
 
 
-def sessions_for_system_ops(since: datetime | None = None, until: datetime | None = None, limit: int = 200) -> list[dict]:
-    """Return sessions from system temp directories (plugin/automation sessions)."""
+def sessions_for_system_ops(
+    since: datetime | None = None,
+    until: datetime | None = None,
+    kind: str | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    """Return sessions from system temp directories (plugin/automation sessions).
+
+    kind ∈ {'user', 'subagent', 'tracker', 'all', None} filters the returned
+    session rows using the same semantics as _where_clauses().
+    """
     sys_prefixes = ("/private/tmp", "/tmp", "/private/var/folders/", "/var/folders/")
     conditions = " OR ".join("s.project_path LIKE ?" for _ in sys_prefixes)
     sql = f"""
@@ -284,6 +310,9 @@ def sessions_for_system_ops(since: datetime | None = None, until: datetime | Non
     if until:
         sql += " AND s.started_at <= ?"
         params.append(until.isoformat())
+    cond = _kind_condition(kind)
+    if cond:
+        sql += f" AND {cond}"
     sql += " GROUP BY s.session_id ORDER BY s.started_at DESC LIMIT ?"
     params.append(limit)
     with connect() as c:

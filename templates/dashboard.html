@@ -171,10 +171,10 @@
     <label>to <input type="date" id="f-to" style="width:120px"></label>
     <label>kind
       <select id="f-kind">
-        <option value="user" selected>user only</option>
+        <option value="user">user only</option>
         <option value="subagent">subagent only</option>
         <option value="tracker">tracker</option>
-        <option value="all">all</option>
+        <option value="all" selected>all</option>
       </select>
     </label>
     <button id="refresh">↺ refresh</button>
@@ -1534,7 +1534,7 @@ async function load() {
   const project = $('#f-project').value.trim();
   const from = $('#f-from').value;
   const to = $('#f-to').value;
-  const kind = $('#f-kind') ? $('#f-kind').value : 'user';
+  const kind = $('#f-kind') ? $('#f-kind').value : 'all';
   let url = '/api/summary?kind=' + encodeURIComponent(kind)
           + (project ? '&project=' + encodeURIComponent(project) : '');
   // Use exact tz-aware timestamps when available (set by 24h preset),

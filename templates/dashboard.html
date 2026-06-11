@@ -305,7 +305,6 @@
 
     <!-- Kind selector panel (middle layer) -->
     <div id="panel-kind">
-      <span id="drill-project-label-kind" style="display:none"></span>
       <h2>session breakdown</h2>
       <div id="kind-cards" class="kind-cards"></div>
       <div id="attr-section" style="display:none;margin-top:20px">
@@ -1132,35 +1131,42 @@ function renderAttributionPanel(rows) {
   }
 }
 
-async function drillIntoProject(label, projectKey) {
+function sinceUntilQuery() {
   const from = $('#f-from').value;
   const to = $('#f-to').value;
+  if (activePreset === 'all') return '&since=all';
+  const sp = exactSince || from;
+  const up = exactUntil || to;
+  let q = '';
+  if (sp) q += '&since=' + encodeURIComponent(sp);
+  if (up) q += '&until=' + encodeURIComponent(up);
+  return q;
+}
+
+function sessionsUrl(projectKey, stage) {
+  let url = '/api/sessions?project=' + encodeURIComponent(projectKey);
+  if (stage) url += '&stage=' + encodeURIComponent(stage);
+  return url + sinceUntilQuery();
+}
+
+async function loadKindPanel(breadcrumbSegments, sesUrl) {
   // Show loading state in the kind panel while fetching
-  $('#drill-project-label-kind').textContent = label;
   clearKids($('#kind-cards'));
   const loadEl = document.createElement('div');
   loadEl.style.cssText = 'color:var(--dim);font-size:11px;margin-top:10px';
   loadEl.textContent = 'loading…';
   $('#kind-cards').appendChild(loadEl);
   $('#panel-overview').style.display = 'none';
+  $('#panel-stage').style.display = 'none';
   $('#panel-kind').style.display = 'block';
   $('#panel-sessions').style.display = 'none';
 
   try {
-    let sesUrl = '/api/sessions?project=' + encodeURIComponent(projectKey);
-    if (activePreset === 'all') {
-      sesUrl += '&since=all';
-    } else {
-      const sp = exactSince || from;
-      const up = exactUntil || to;
-      if (sp) sesUrl += '&since=' + encodeURIComponent(sp);
-      if (up) sesUrl += '&until=' + encodeURIComponent(up);
-    }
-    const attrUrl = '/api/attribution?project=' + encodeURIComponent(projectKey);
+    const attrUrl = '/api/attribution?project=' + encodeURIComponent(currentProjectKey);
     const [sesResp, attrResp] = await Promise.all([fetch(sesUrl), fetch(attrUrl)]);
     const [d, attrD] = await Promise.all([sesResp.json(), attrResp.json()]);
     currentSessions = d.sessions || [];
-    renderKindPanel(label, currentSessions);
+    renderKindPanel(breadcrumbSegments, currentSessions);
     renderAttributionPanel(attrD.attribution || []);
   } catch(e) {
     renderAttributionPanel([]);
@@ -1170,6 +1176,51 @@ async function drillIntoProject(label, projectKey) {
     errEl.textContent = 'error: ' + e.message;
     $('#kind-cards').appendChild(errEl);
   }
+}
+
+async function drillIntoProject(label, projectKey) {
+  currentProjectKey = projectKey;
+  currentProjectLabel = label;
+  clearKids($('#t-project-stage tbody'));
+  $('#panel-overview').style.display = 'none';
+  $('#panel-stage').style.display = 'block';
+  $('#panel-kind').style.display = 'none';
+  $('#panel-sessions').style.display = 'none';
+  renderBreadcrumb([
+    { label: '~ overview', onClick: showOverview },
+    { label },
+  ]);
+
+  let byStage = [];
+  try {
+    const sumResp = await fetch('/api/summary?project=' + encodeURIComponent(projectKey) + '&kind=all' + sinceUntilQuery());
+    const sumD = await sumResp.json();
+    byStage = sumD.by_stage || [];
+  } catch (e) {
+    byStage = [];
+  }
+
+  if (byStage.length === 0) {
+    await loadKindPanel(
+      [{ label: '~ overview', onClick: showOverview }, { label }],
+      sessionsUrl(projectKey, null),
+    );
+    return;
+  }
+
+  renderProjectStageTable(byStage);
+}
+
+function drillIntoStage(stage) {
+  currentStage = stage;
+  loadKindPanel(
+    [
+      { label: '~ overview', onClick: showOverview },
+      { label: currentProjectLabel, onClick: showStagePanel },
+      { label: stage },
+    ],
+    sessionsUrl(currentProjectKey, stage),
+  );
 }
 
 function showOverview() {

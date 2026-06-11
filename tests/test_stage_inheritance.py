@@ -141,3 +141,33 @@ def test_overhead_sessions_excluded_from_totals_by_stage(db):
     rows = {r["stage"]: r for r in totals_by_stage()}
     assert "_tracker_overhead_" not in rows
     assert rows.get("impl", {}).get("input_tokens") == 100
+
+
+def test_project_filter_falls_back_to_overhead_when_all_sessions_overhead(db):
+    """A stage_map cwd rule can tag every session of a project as
+    _tracker_overhead_ (e.g. to keep a meta/tooling project out of global SDLC
+    stats). Querying that project specifically should still surface its
+    totals as a _tracker_overhead_ row instead of an empty list."""
+    conn = _sql.connect(str(db))
+    conn.execute(
+        "INSERT INTO sessions(session_id, project_name, project_path, project_dir, "
+        "first_user_message, is_tracker_overhead) VALUES (?,?,?,?,?,?)",
+        ("root1", "myproj", "/Users/me/code/myproj", "-Users-me-code-myproj", "hello", 0),
+    )
+    conn.execute(
+        "INSERT INTO session_stage(session_id, stage, source) VALUES (?,?,?)",
+        ("root1", "_tracker_overhead_", "cwd_map"),
+    )
+    conn.execute("INSERT INTO turns(session_id, input_tokens) VALUES (?,?)", ("root1", 100))
+    conn.commit()
+    conn.close()
+
+    # Global aggregate still excludes overhead entirely.
+    assert totals_by_stage() == []
+
+    # Project-scoped query falls back to surfacing the overhead totals.
+    rows = totals_by_stage(project="myproj")
+    assert len(rows) == 1
+    assert rows[0]["stage"] == "_tracker_overhead_"
+    assert rows[0]["sessions"] == 1
+    assert rows[0]["input_tokens"] == 100

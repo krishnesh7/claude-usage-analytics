@@ -124,18 +124,7 @@ def _where_clauses(
     return clause, params
 
 
-def totals_by_stage(
-    project: str | None = None,
-    since: datetime | None = None,
-    kind: str | None = None,
-    until: datetime | None = None,
-) -> list[dict]:
-    """Aggregate token usage grouped by SDLC stage.
-
-    Child/agent sessions inherit their parent's stage so subagent turns count
-    toward the parent's SDLC work. Only root sessions count in `sessions`;
-    overhead sessions are excluded entirely.
-    """
+def _totals_by_stage_base_sql(exclude_overhead: bool) -> str:
     # Resolve effective stage: own stage for roots, parent's stage for children.
     # COUNT(sessions) uses only root sessions; token SUMs span the whole tree.
     sql = """
@@ -158,21 +147,54 @@ def totals_by_stage(
         LEFT JOIN session_stage own_ss ON own_ss.session_id = s.session_id
         LEFT JOIN session_stage par_ss ON par_ss.session_id = s.parent_session_id
         LEFT JOIN turns t ON t.session_id = s.session_id
+    """
+    if exclude_overhead:
+        sql += """
         WHERE COALESCE(s.is_tracker_overhead, 0) = 0
           AND COALESCE(own_ss.stage, '') != '_tracker_overhead_'
+        """
+    return sql
+
+
+def totals_by_stage(
+    project: str | None = None,
+    since: datetime | None = None,
+    kind: str | None = None,
+    until: datetime | None = None,
+) -> list[dict]:
+    """Aggregate token usage grouped by SDLC stage.
+
+    Child/agent sessions inherit their parent's stage so subagent turns count
+    toward the parent's SDLC work. Only root sessions count in `sessions`;
+    overhead sessions are excluded entirely from the global (no-project)
+    aggregate.
+
+    A `stage_map` cwd rule can tag *every* session of a project as
+    `_tracker_overhead_` (e.g. to keep a meta/tooling project out of global
+    SDLC stats). When `project` is given and that exclusion would zero out
+    the result, fall back to an unfiltered query so the project's
+    `_tracker_overhead_` totals are surfaced instead of an empty list.
     """
     extra_clause, params = _where_clauses(project, since, None, kind=kind, until=until)
     extra = extra_clause.lstrip(" WHERE ").strip()
-    if extra:
-        sql += f" AND {extra}"
-    sql = f"""
-        SELECT * FROM ({sql}
-        GROUP BY 1) sub
-        WHERE sub.stage != 'unclassified' OR sub.sessions > 0
-        ORDER BY input_tokens + cache_creation_tokens + cache_read_tokens + output_tokens DESC
-    """
-    with connect() as c:
-        return [dict(r) for r in c.execute(sql, params)]
+
+    def run(exclude_overhead: bool) -> list[dict]:
+        sql = _totals_by_stage_base_sql(exclude_overhead)
+        if extra:
+            sql += (" AND " if exclude_overhead else " WHERE ") + extra
+        sql = f"""
+            SELECT * FROM ({sql}
+            GROUP BY 1) sub
+            WHERE sub.stage != 'unclassified' OR sub.sessions > 0
+            ORDER BY input_tokens + cache_creation_tokens + cache_read_tokens + output_tokens DESC
+        """
+        with connect() as c:
+            return [dict(r) for r in c.execute(sql, params)]
+
+    rows = run(exclude_overhead=True)
+    if not rows and project:
+        rows = run(exclude_overhead=False)
+    return rows
 
 
 def totals_by_project(since: datetime | None = None, kind: str | None = None, until: datetime | None = None) -> list[dict]:

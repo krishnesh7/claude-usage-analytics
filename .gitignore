@@ -26,6 +26,12 @@ DIFFERENTIATION_MATRIX.md
 ARTICLE_POSITIONING.md
 MEDIUM_ARTICLE_OUTLINE.md
 MEDIUM_ARTICLE_DRAFT.md
+docs/2026-06-12_dashboard-hero-kpis.png
+docs/2026-06-12_dashboard-overview.png
+docs/2026-06-12_efficiency-panel.png
+docs/2026-06-12_sdlc-stage-breakdown.png
+docs/2026-06-12_daily-activity-chart.png
+docs/2026-06-12_model-subagent-breakdown.png
 
 # Local databases / caches (live outside repo, but guard anyway)
 *.db

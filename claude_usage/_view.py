@@ -106,8 +106,9 @@ def _is_ancestor_of_registered(path: str, registered_roots: list) -> bool:
 
 
 def _collapse_project_rows(by_project: list[dict], grand_total: int) -> list[dict]:
-    """Filter ancestor-path rows and collapse system-temp rows into one
-    'system operations' synthetic entry appended at the bottom."""
+    """Relabel ancestor-path rows (sessions opened above a registered project's
+    root) and collapse system-temp rows into one 'system operations' synthetic
+    entry appended at the bottom."""
     from pathlib import Path
     registered_roots = [
         Path(p.root_path).resolve()
@@ -133,7 +134,9 @@ def _collapse_project_rows(by_project: list[dict], grand_total: int) -> list[dic
         if _is_system_temp(raw):
             ops_rows.append(r)
         elif raw.startswith("/") and _is_ancestor_of_registered(raw, all_path_roots):
-            pass  # suppress: this path is a parent of another listed project
+            r["label"] = "(parent directory - sessions opened above project roots)"
+            r["is_ancestor_row"] = True
+            kept.append(r)
         else:
             kept.append(r)
 

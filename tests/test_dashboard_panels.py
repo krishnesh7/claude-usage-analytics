@@ -113,8 +113,8 @@ def _insert_full_turn(db_path, session_id, project_name, ts, model,
     conn.close()
 
 
-def test_by_project_has_fluency_fields(db):
-    """by_project rows must carry the fields used by computeFluency() client-side."""
+def test_by_project_has_efficiency_fields(db):
+    """by_project rows must carry the fields used by computeEfficiency() client-side."""
     _insert_full_turn(db, "fx1", "alpha", "2026-06-01T10:00:00", "claude-sonnet-4-6")
     _insert_full_turn(db, "fx2", "beta",  "2026-06-01T11:00:00", "claude-opus-4-8")
 

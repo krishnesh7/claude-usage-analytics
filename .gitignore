@@ -19,6 +19,14 @@ report-*.html
 # Personal usage tracking (local cost accounting — not for sharing)
 docs/usage/CLAUDE_USAGE.md
 
+# Personal Medium article drafts/research — not for the repo
+PROJECT_ANALYSIS.md
+EXISTING_CONTENT_RESEARCH.md
+DIFFERENTIATION_MATRIX.md
+ARTICLE_POSITIONING.md
+MEDIUM_ARTICLE_OUTLINE.md
+MEDIUM_ARTICLE_DRAFT.md
+
 # Local databases / caches (live outside repo, but guard anyway)
 *.db
 *.db-wal

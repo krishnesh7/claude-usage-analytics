@@ -89,11 +89,11 @@
   .session-name { display: block; color: var(--fg); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
   .session-sub-id { color: var(--blue); font-size: 10px; letter-spacing: 0.3px; }
   .hint { color: var(--dim); font-size: 11px; margin: 4px 0 6px; }
-  /* Fluency panel */
-  .fluency-score { font-weight: 700; }
-  .fluency-rec { border-left: 3px solid var(--red); padding: 6px 10px; margin-bottom: 6px;
+  /* Efficiency panel */
+  .efficiency-score { font-weight: 700; }
+  .efficiency-rec { border-left: 3px solid var(--red); padding: 6px 10px; margin-bottom: 6px;
     background: rgba(255,107,128,0.06); font-size: 12px; line-height: 1.4; }
-  .fluency-rec a { color: var(--blue); display: inline-block; margin-top: 4px; }
+  .efficiency-rec a { color: var(--blue); display: inline-block; margin-top: 4px; }
   #panel-sessions { display: none; }
   #panel-kind { display: none; }
   .kind-cards { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
@@ -242,16 +242,16 @@
         <tbody></tbody>
       </table>
 
-      <div id="fluency-panel" style="display:none">
-        <h2>by fluency <span class="sub" style="font-size:12px;font-weight:400;color:var(--dim);margin-left:8px">token efficiency by project</span></h2>
+      <div id="efficiency-panel" style="display:none">
+        <h2>by efficiency <span class="sub" style="font-size:12px;font-weight:400;color:var(--dim);margin-left:8px">relative scores across your projects</span></h2>
         <p class="hint">Percentile scores within your projects. Higher = more efficient.</p>
-        <table id="t-fluency">
+        <table id="t-efficiency">
           <colgroup>
             <col class="c-name"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct"><col class="c-pct">
           </colgroup>
           <thead><tr>
             <th>project</th>
-            <th data-tip="Composite of the 4 axes below, as a percentile among your projects. Tells you which projects have the healthiest token usage patterns.">fluency</th>
+            <th data-tip="Composite of the 4 axes below, as a percentile among your projects. Tells you which projects have the healthiest token usage patterns.">efficiency</th>
             <th data-tip="% of input-side tokens served from cache. High = you reuse context well instead of re-sending it fresh.">cache hygiene</th>
             <th data-tip="Ratio of cache reads to cache writes. High = your cached prompts got reused many times; low = cache was written but rarely read back.">cache payback</th>
             <th data-tip="How much of your token spend used lighter models (Sonnet/Haiku) vs Opus. Scored globally across all projects in v1.">model fit</th>
@@ -259,7 +259,7 @@
           </tr></thead>
           <tbody></tbody>
         </table>
-        <div id="fluency-recs"></div>
+        <div id="efficiency-recs"></div>
       </div>
 
       <h2 id="h-agent">by subagent</h2>
@@ -583,7 +583,7 @@ function stageTip(stage) {
   return STAGE_TIPS[stage] || "SDLC stage classified from the session's first message.";
 }
 
-function computeFluency(byProject, byModel) {
+function computeEfficiency(byProject, byModel) {
   if (!byProject || byProject.length < 2) return null;
 
   const totalModelTokens = (byModel || []).reduce((s, r) => s + (r.total_tokens || 0), 0);
@@ -641,33 +641,33 @@ function computeFluency(byProject, byModel) {
   });
 }
 
-function fluencyScoreCls(s) { return s >= 70 ? 'ok' : s >= 40 ? 'warn' : 'red'; }
+function efficiencyScoreCls(s) { return s >= 70 ? 'ok' : s >= 40 ? 'warn' : 'red'; }
 
-function renderFluencyPanel(byProject, byModel) {
-  const panel = $('#fluency-panel');
-  const scored = computeFluency(byProject, byModel);
+function renderEfficiencyPanel(byProject, byModel) {
+  const panel = $('#efficiency-panel');
+  const scored = computeEfficiency(byProject, byModel);
   if (!scored) { panel.style.display = 'none'; return; }
   panel.style.display = '';
-  rowCache['t-fluency'] = scored;
-  renderFluencyTable(scored);
-  renderFluencyRecs(scored);
+  rowCache['t-efficiency'] = scored;
+  renderEfficiencyTable(scored);
+  renderEfficiencyRecs(scored);
 }
 
-function renderFluencyTable(scored) {
-  const tbody = $('#t-fluency tbody');
+function renderEfficiencyTable(scored) {
+  const tbody = $('#t-efficiency tbody');
   clearKids(tbody);
   const shortName = n => !n ? '(unknown)' : n.length > 22 ? n.slice(0, 21) + '…' : n;
-  const rows = applySort('t-fluency', scored);
-  markSortHeader('t-fluency');
+  const rows = applySort('t-efficiency', scored);
+  markSortHeader('t-efficiency');
   for (const p of rows.slice(0, 20)) {
-    const cls = fluencyScoreCls(p.composite);
+    const cls = efficiencyScoreCls(p.composite);
     const tip = p.r.description || (p.name && p.name.length > 22 ? p.name : '');
     const tr = mkRow([
       { text: shortName(p.name), tip },
-      { text: String(p.composite), cls: 'pct fluency-score ' + cls },
+      { text: String(p.composite), cls: 'pct efficiency-score ' + cls },
     ]);
     for (const ax of p.axes) {
-      const axCls = fluencyScoreCls(ax.score);
+      const axCls = efficiencyScoreCls(ax.score);
       const td = document.createElement('td');
       td.className = 'share-cell';
       const bar = document.createElement('div');
@@ -681,7 +681,7 @@ function renderFluencyTable(scored) {
   }
 }
 
-const FLUENCY_REC_INFO = {
+const EFFICIENCY_REC_INFO = {
   'Cache Hygiene': {
     text: score => `Cache Hygiene is <b>${score}</b> (lowest of your projects). Most input tokens are sent fresh rather than reused from cache. Try keeping a stable prompt prefix so Claude can cache more context.`,
     href: 'https://docs.claude.com/en/docs/build-with-claude/prompt-caching',
@@ -704,8 +704,8 @@ const FLUENCY_REC_INFO = {
   },
 };
 
-function renderFluencyRecs(scored) {
-  const container = $('#fluency-recs');
+function renderEfficiencyRecs(scored) {
+  const container = $('#efficiency-recs');
   clearKids(container);
 
   // 1. Find each project's worst-scoring axis (ties broken by axis order,
@@ -733,9 +733,9 @@ function renderFluencyRecs(scored) {
   deduped.sort((a, b) => a.score - b.score);
 
   for (const c of deduped.slice(0, 3)) {
-    const info = FLUENCY_REC_INFO[c.axis];
+    const info = EFFICIENCY_REC_INFO[c.axis];
     const row = document.createElement('div');
-    row.className = 'fluency-rec';
+    row.className = 'efficiency-rec';
 
     const textEl = document.createElement('div');
     appendRichText(textEl, `<b>${c.project}</b> — ${info.text(c.score)}`);
@@ -1567,7 +1567,7 @@ async function load() {
     renderStageTable(d.by_stage);
     renderProjectTable(d.by_project, priorData ? priorData.by_project : null);
     renderModelTable(d.by_model);
-    renderFluencyPanel(d.by_project || [], d.by_model || []);
+    renderEfficiencyPanel(d.by_project || [], d.by_model || []);
     renderAgentTable(d.by_agent_type);
     renderSkillsTable(d.top_skills || []);
     $('#live-text').textContent = 'live';
@@ -1623,14 +1623,14 @@ enableSort('t-model', {
   5: r => r.cost?.total_usd ?? 0, 6: r => r.cache_hit_rate ?? -1,
 }, renderModelTable);
 
-enableSort('t-fluency', {
+enableSort('t-efficiency', {
   0: r => r.name || '',
   1: r => r.composite,
   2: r => r.axes[0].score,
   3: r => r.axes[1].score,
   4: r => r.axes[2].score,
   5: r => r.axes[3].score,
-}, renderFluencyTable);
+}, renderEfficiencyTable);
 
 $('#refresh').addEventListener('click', load);
 $('#f-project').addEventListener('change', load);

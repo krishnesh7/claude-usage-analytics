@@ -24,7 +24,7 @@ If the DB doesn't exist yet, run `cu parse` first.
 ## Step 2 — Check if the project is already registered
 
 ```bash
-/Users/kpujari/code/claude-usage-analytics/.venv/bin/cu project list
+${CLAUDE_PLUGIN_ROOT}/bin/cu project list
 ```
 
 If the project already appears in the list, skip to Step 4.
@@ -36,7 +36,7 @@ Then run from the project's root directory:
 
 ```bash
 cd <project-root>
-/Users/kpujari/code/claude-usage-analytics/.venv/bin/cu project init <name>
+${CLAUDE_PLUGIN_ROOT}/bin/cu project init <name>
 ```
 
 Confirm registration succeeded — the output shows `match_patterns` that will
@@ -59,7 +59,7 @@ When they answer, show them the line to add to `stage_map.json`.
 Run a quick confidence check on the current directory:
 
 ```bash
-/Users/kpujari/code/claude-usage-analytics/.venv/bin/cu session-resolve --cwd "$(pwd)"
+${CLAUDE_PLUGIN_ROOT}/bin/cu session-resolve --cwd "$(pwd)"
 ```
 
 Explain the result:

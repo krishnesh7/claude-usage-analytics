@@ -1,0 +1,16 @@
+# Shell scripts must keep LF line endings (run via bash on macOS/Linux)
+*.sh text eol=lf
+bin/cu text eol=lf
+
+# Common text files
+*.md text eol=lf
+*.json text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.py text eol=lf
+
+# Explicitly mark binary files
+*.png binary
+*.jpg binary
+*.svg binary
+*.db binary

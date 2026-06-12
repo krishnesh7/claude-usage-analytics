@@ -76,7 +76,7 @@ not dollars).
 ### Named project registry
 
 session-report groups sessions by their encoded filesystem path:
-`-Users-kpujari-Documents-Claude-Projects-rk-canslim`
+`-Users-alex-Documents-Claude-Projects-acme-app`
 
 This creates a separate entry for every working directory variant:
 - Main project dir → one entry

@@ -345,7 +345,7 @@ function matchStage(projectPath, projectDir) {
 }
 
 // Claude Code encodes cwd by replacing each path separator with '-'.
-// Example: -Users-kpujari-Documents-Claude-Projects-agrisync -> /Users/kpujari/Documents/Claude/Projects/agrisync
+// Example: -Users-alex-Documents-Claude-Projects-acme-app -> /Users/alex/Documents/Claude/Projects/acme-app
 // This is lossy (real '-' in dir names collides) but matches Claude Code's own scheme.
 function decodeProjectPath(encoded) {
   if (!encoded) return null

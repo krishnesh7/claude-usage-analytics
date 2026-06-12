@@ -274,10 +274,31 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
         r["total_tokens_h"] = _fmt(r["total_tokens"])
         r["cache_hit_rate"] = _cache_hit_rate(r)
 
-    grand_total = sum(r["total_tokens"] for r in by_stage)
-    grand_cost = sum(r["cost"]["total_usd"] for r in by_stage)
+    # A subagent whose root is `_tracker_overhead_` but which lacks its own
+    # stage row can surface as a `_tracker_overhead_` bucket here too (with
+    # sessions=0). Strip it so the SDLC breakdown only shows real project work.
+    by_stage = [r for r in by_stage if r["stage"] != "_tracker_overhead_"]
+
+    stage_classified_tokens = sum(r["total_tokens"] for r in by_stage)
     for r in by_stage:
-        r["pct_of_total"] = (100.0 * r["total_tokens"] / grand_total) if grand_total else 0.0
+        r["pct_of_total"] = 100.0 * r["total_tokens"] / (stage_classified_tokens or 1)
+
+    # Population totals: every session matching project/since/until/kind,
+    # including subagents and tracker overhead - the same population the
+    # cost figures (via turns_by_model) describe.
+    pop_totals = dbmod.population_totals(project=project, since=since_dt, until=until_dt, kind=kind)
+    total_sessions = pop_totals["sessions"]
+    total_turns = pop_totals["turns"]
+    total_input = pop_totals["input_tokens"]
+    total_cc = pop_totals["cache_creation_tokens"]
+    total_cr = pop_totals["cache_read_tokens"]
+    total_out = pop_totals["output_tokens"]
+    raw_total_tokens = _total_tokens(pop_totals)
+    cache_total = total_cc + total_cr + total_input
+    cache_hit = (total_cr / cache_total) if cache_total else None
+
+    overhead_tokens = max(raw_total_tokens - stage_classified_tokens, 0)
+    overhead_pct = (100.0 * overhead_tokens / raw_total_tokens) if raw_total_tokens else 0.0
 
     by_project = []
     if not project:
@@ -285,7 +306,7 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
         registry = projects_mod.load_all()
         for r in by_project[:30]:
             lookup_key = r.get("project_name") or r.get("project_path", "")
-            per_model = dbmod.turns_by_model(project=lookup_key, since=since_dt, until=until_dt)
+            per_model = dbmod.turns_by_model(project=lookup_key, since=since_dt, until=until_dt, kind=kind)
             all_costs = pricing_mod.total_cost_all_modes(per_model, prices)
             r["cost"] = pricing_mod.cost_dict(all_costs["subscription"])
             r["cost_api"] = round(all_costs["api"].total_usd, 4)
@@ -295,11 +316,11 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
                 r[k + "_h"] = _fmt(r[k])
             r["total_tokens"] = _total_tokens(r)
             r["total_tokens_h"] = _fmt(r["total_tokens"])
-            r["pct_of_total"] = (100.0 * r["total_tokens"] / grand_total) if grand_total else 0.0
+            r["pct_of_total"] = (100.0 * r["total_tokens"] / raw_total_tokens) if raw_total_tokens else 0.0
             r["cache_hit_rate"] = _cache_hit_rate(r)
             r["label"] = _project_label(r)
             r["description"] = _project_description(r, registry)
-        by_project = _collapse_project_rows(by_project[:30], grand_total)
+        by_project = _collapse_project_rows(by_project[:30], raw_total_tokens)
 
     by_agent_type = dbmod.totals_by_agent_type(project=project, since=since_dt, kind=kind, until=until_dt)
     for r in by_agent_type:
@@ -309,7 +330,7 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
         r["cache_hit_rate"] = _cache_hit_rate(r)
 
     # by-model rollup — total tokens and cost per Claude model used in window
-    by_model_rows = dbmod.turns_by_model(project=project, since=since_dt, until=until_dt)
+    by_model_rows = dbmod.turns_by_model(project=project, since=since_dt, until=until_dt, kind=kind)
     by_model = {}
     for t in by_model_rows:
         m = t.get("model") or "unknown"
@@ -365,24 +386,14 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
 
     top_skills = dbmod.top_skills(project=project, since=since_dt, limit=15, until=until_dt)
 
-    # Grand totals + cache hit-rate
-    total_input = sum(r["input_tokens"] for r in by_stage)
-    total_cc = sum(r["cache_creation_tokens"] for r in by_stage)
-    total_cr = sum(r["cache_read_tokens"] for r in by_stage)
-    total_out = sum(r["output_tokens"] for r in by_stage)
-    total_sessions = sum(r["sessions"] for r in by_stage)
-    total_turns = sum(r["turns"] for r in by_stage)
-    cache_total = total_cc + total_cr + total_input
-    cache_hit = (total_cr / cache_total) if cache_total else None
-
-    per_model = dbmod.turns_by_model(project=project, since=since_dt, until=until_dt)
+    per_model = dbmod.turns_by_model(project=project, since=since_dt, until=until_dt, kind=kind)
     all_grand = pricing_mod.total_cost_all_modes(per_model, prices)
     grand_cost_obj = pricing_mod.cost_dict(all_grand["subscription"])
     grand_cost_api = round(all_grand["api"].total_usd, 4)
     grand_cost_conservative = round(all_grand["conservative"].total_usd, 4)
     grand_cost_subscription = round(all_grand["subscription"].total_usd, 4)
 
-    takes = _build_takes(by_stage, by_project, grand_total, grand_cost_obj["total_usd"])
+    takes = _build_takes(by_stage, by_project, overhead_tokens, overhead_pct, raw_total_tokens, grand_cost_obj["total_usd"])
 
     return {
         "filters": {"project": project, "since": since, "kind": kind or "all", "until": until},
@@ -401,12 +412,14 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
             "cache_creation_tokens": total_cc,
             "cache_read_tokens": total_cr,
             "output_tokens": total_out,
-            "total_tokens": grand_total,
+            "total_tokens": raw_total_tokens,
             "input_tokens_h": _fmt(total_input),
             "cache_creation_tokens_h": _fmt(total_cc),
             "cache_read_tokens_h": _fmt(total_cr),
             "output_tokens_h": _fmt(total_out),
-            "total_tokens_h": _fmt(grand_total),
+            "total_tokens_h": _fmt(raw_total_tokens),
+            "overhead_tokens_h": _fmt(overhead_tokens),
+            "overhead_pct": round(overhead_pct, 2),
             "cost": grand_cost_obj,
             "cost_api": grand_cost_api,
             "cost_conservative": grand_cost_conservative,
@@ -420,25 +433,23 @@ def build(project: str | None, since: str, kind: str | None = None, until: str |
     }
 
 
-def _build_takes(by_stage, by_project, grand_total, grand_cost) -> list[dict[str, Any]]:
+def _build_takes(by_stage, by_project, overhead_tokens, overhead_pct, raw_total_tokens, grand_cost) -> list[dict[str, Any]]:
     """3-5 one-line headlines mirroring the session-report skill's style."""
     takes: list[dict[str, Any]] = []
-    if grand_total <= 0:
+    if raw_total_tokens <= 0:
         return takes
 
-    overhead = next((r for r in by_stage if r["stage"] == "_tracker_overhead_"), None)
-    if overhead:
-        pct = 100.0 * overhead["total_tokens"] / grand_total
-        cls = "good" if pct < 0.5 else "warn" if pct < 2.0 else "bad"
+    if overhead_tokens > 0:
+        cls = "good" if overhead_pct < 0.5 else "warn" if overhead_pct < 2.0 else "bad"
         takes.append({
-            "fig": f"{pct:.2f}%",
-            "txt": f"<b>tracker overhead</b> is {pct:.2f}% of total tokens (target &lt;0.5%)",
+            "fig": f"{overhead_pct:.2f}%",
+            "txt": f"<b>tracker overhead</b> is {overhead_pct:.2f}% of total tokens (target &lt;0.5%)",
             "cls": cls,
         })
 
     if by_stage:
         top = max(by_stage, key=lambda r: r["total_tokens"])
-        pct = 100.0 * top["total_tokens"] / grand_total
+        pct = top["pct_of_total"]
         if pct > 40:
             takes.append({
                 "fig": f"{pct:.0f}%",
@@ -448,7 +459,7 @@ def _build_takes(by_stage, by_project, grand_total, grand_cost) -> list[dict[str
 
     if by_project:
         biggest = max(by_project, key=lambda r: r["total_tokens"])
-        pct = 100.0 * biggest["total_tokens"] / grand_total
+        pct = biggest["pct_of_total"]
         if pct > 50:
             takes.append({
                 "fig": f"{pct:.0f}%",

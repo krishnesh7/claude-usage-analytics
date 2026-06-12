@@ -401,6 +401,7 @@ def turns_by_model(
     project: str | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
+    kind: str | None = None,
 ) -> list[dict]:
     """Per-model rows joined with sessions for filter compatibility. Used by pricing."""
     sql = """
@@ -415,10 +416,44 @@ def turns_by_model(
         FROM sessions s
         JOIN turns t ON t.session_id = s.session_id
     """
-    clause, params = _where_clauses(project, since, None, until=until)
+    clause, params = _where_clauses(project, since, None, kind=kind, until=until)
     sql += clause + " GROUP BY COALESCE(t.model, 'unknown')"
     with connect() as c:
         return [dict(r) for r in c.execute(sql, params)]
+
+
+def population_totals(
+    project: str | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    kind: str | None = None,
+) -> dict:
+    """Aggregate sessions/turns/token-mix across the FULL population matching the
+    filters - every session including subagents and tracker overhead, with no
+    stage-based exclusion. This is the basis for Summary totals so they describe
+    the same population as the cost figures (also computed over the full set via
+    turns_by_model)."""
+    sql = """
+        SELECT
+          COUNT(DISTINCT CASE
+            WHEN s.parent_session_id IS NULL AND s.session_id NOT LIKE '%::agent-%'
+            THEN s.session_id END) AS sessions,
+          COUNT(t.id) AS turns,
+          COALESCE(SUM(t.input_tokens), 0) AS input_tokens,
+          COALESCE(SUM(t.cache_creation_tokens), 0) AS cache_creation_tokens,
+          COALESCE(SUM(t.cache_read_tokens), 0) AS cache_read_tokens,
+          COALESCE(SUM(t.output_tokens), 0) AS output_tokens
+        FROM sessions s
+        LEFT JOIN turns t ON t.session_id = s.session_id
+    """
+    clause, params = _where_clauses(project, since, None, kind=kind, until=until)
+    sql += clause
+    with connect() as c:
+        row = c.execute(sql, params).fetchone()
+        return dict(row) if row else {
+            "sessions": 0, "turns": 0, "input_tokens": 0,
+            "cache_creation_tokens": 0, "cache_read_tokens": 0, "output_tokens": 0,
+        }
 
 
 def turns_by_model_for_stage(

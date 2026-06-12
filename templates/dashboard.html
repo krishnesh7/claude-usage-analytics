@@ -822,11 +822,15 @@ function renderProjectTable(rows, priorRows) {
   };
   for (const r of rows.slice(0, 20)) {
     const isSysOps = !!r.is_system_ops;
+    const isAncestor = !!r.is_ancestor_row;
     const name = r.label || r.display_name || r.project_name || r.project_path || '(unknown)';
     const label = isSysOps ? '⚙ ' + name
+      : isAncestor ? '📁 ' + name
       : (r.project_name ? name : shortenPath(name) + ' (path)');
     const tooltip = isSysOps
       ? 'Plugin & automation sessions (memory consolidation etc.) — included in grand total'
+      : isAncestor
+      ? `Sessions opened in ${r.project_path} (a parent directory of project(s) below, included in grand total)`
       : (r.description || r.project_path || '');
     const drillKey = r.project_name || r.display_name || r.project_path;
     const priorCost = priorByKey[drillKey] ?? null;
@@ -839,7 +843,7 @@ function renderProjectTable(rows, priorRows) {
       const cls = delta > 0 ? 'pct red' : delta < 0 ? 'pct ok' : 'pct';
       deltaCell = { text: sign + '$' + Math.abs(delta).toFixed(2), cls };
     }
-    const rowCls = isSysOps ? 'sys-ops clickable' : 'clickable';
+    const rowCls = (isSysOps || isAncestor) ? 'sys-ops clickable' : 'clickable';
     const tr = mkRow([
       { text: label, tip: tooltip },
       r.sessions, r.turns,

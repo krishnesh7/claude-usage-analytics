@@ -9,7 +9,10 @@ single project's share can exceed 100%.
 """
 import sqlite3 as _sql
 
+import pytest
+
 from claude_usage import _view
+from claude_usage import projects as projects_mod
 
 
 def _seed(db, sessions, stages=None, turns=None):
@@ -106,3 +109,33 @@ def test_by_project_pct_of_total_not_inflated(db):
     by_name = {r["project_name"]: r for r in result["by_project"]}
     assert by_name["proj_a"]["pct_of_total"] == 60.0
     assert by_name["proj_b"]["pct_of_total"] == 40.0
+
+
+def test_ancestor_path_row_kept_and_pct_of_total_sums_to_100(db, monkeypatch):
+    monkeypatch.setattr(
+        projects_mod,
+        "load_all",
+        lambda: {
+            "proj_a": projects_mod.Project(name="proj_a", root_path="/Users/me/code/proj_a"),
+        },
+    )
+    _seed(
+        db,
+        sessions=[
+            {"session_id": "a1", "project_name": "proj_a", "project_path": "/Users/me/code/proj_a", "project_dir": "-Users-me-code-proj_a"},
+            {"session_id": "p1", "project_name": None, "project_path": "/Users/me/code", "project_dir": "-Users-me-code"},
+        ],
+        turns=[
+            ("a1", 300),
+            ("p1", 200),
+        ],
+    )
+    result = _view.build(project=None, since="all")
+
+    by_project = result["by_project"]
+    assert sum(r["pct_of_total"] for r in by_project) == pytest.approx(100.0)
+
+    ancestor = next(r for r in by_project if r.get("is_ancestor_row"))
+    assert ancestor["project_path"] == "/Users/me/code"
+    assert ancestor["pct_of_total"] == pytest.approx(40.0)
+    assert "parent directory" in ancestor["label"]

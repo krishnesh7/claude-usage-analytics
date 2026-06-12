@@ -90,7 +90,15 @@ def build_project_view(project_name: str) -> dict[str, Any]:
     main_sessions = [s for s in sessions if not s["parent_session_id"]]
     subagent_sessions = [s for s in sessions if s["parent_session_id"]]
 
+    # Lifetime totals across every session, including tracker-overhead ones —
+    # this is the basis for the Summary's token/session/cost figures so they
+    # all describe the same population.
+    raw_total_tokens = sum(_total_tokens(s) for s in sessions) or 1
+
     # Lifetime totals via the standard per-stage rollup filtered to this project.
+    # `_tracker_overhead_`-classified sessions are excluded here so the SDLC
+    # breakdown reflects real project work; the gap vs. raw_total_tokens is
+    # reported separately as "tracker overhead" below.
     by_stage_rows = dbmod.totals_by_stage(project=project_name, since=None)
     for r in by_stage_rows:
         per_model = dbmod.turns_by_model_for_stage(r["stage"], project=project_name, since=None)
@@ -100,9 +108,17 @@ def build_project_view(project_name: str) -> dict[str, Any]:
         r["total_tokens"] = _total_tokens(r)
         r["total_tokens_h"] = _fmt(r["total_tokens"])
 
-    grand_tokens = sum(r["total_tokens"] for r in by_stage_rows) or 1
+    # A subagent whose root is `_tracker_overhead_` but which lacks its own
+    # stage row can surface as a `_tracker_overhead_` bucket here too (with
+    # sessions=0). Strip it so the SDLC breakdown only shows real project work.
+    by_stage_rows = [r for r in by_stage_rows if r["stage"] != "_tracker_overhead_"]
+
+    stage_classified_tokens = sum(r["total_tokens"] for r in by_stage_rows)
     for r in by_stage_rows:
-        r["pct_of_total"] = 100.0 * r["total_tokens"] / grand_tokens
+        r["pct_of_total"] = 100.0 * r["total_tokens"] / (stage_classified_tokens or 1)
+
+    overhead_tokens = max(raw_total_tokens - stage_classified_tokens, 0)
+    overhead_pct = (100.0 * overhead_tokens / raw_total_tokens) if raw_total_tokens else 0.0
 
     # Lifetime cost across all turns in this project.
     per_model_all = dbmod.turns_by_model(project=project_name, since=None)
@@ -174,18 +190,12 @@ def build_project_view(project_name: str) -> dict[str, Any]:
     )
 
     # Annotate each session row for the audit trail.
-    overhead_tokens = 0
     for s in sessions:
         s["total_tokens"] = _total_tokens(s)
         s["total_tokens_h"] = _fmt(s["total_tokens"])
         # Cost imputation by joining each session's per-model breakdown is expensive;
         # approximate using project-average $/token (acceptable for audit display).
-        if grand_tokens:
-            s["cost_usd_approx"] = round(grand_cost["total_usd"] * s["total_tokens"] / grand_tokens, 4)
-        else:
-            s["cost_usd_approx"] = 0.0
-        if s.get("is_tracker_overhead"):
-            overhead_tokens += s["total_tokens"]
+        s["cost_usd_approx"] = round(grand_cost["total_usd"] * s["total_tokens"] / raw_total_tokens, 4)
         # Pretty top-tools string.
         tt = s.get("top_tools") or []
         s["top_tools_str"] = ", ".join(f"{name}×{count}" for name, count in tt[:4]) or "—"
@@ -199,8 +209,6 @@ def build_project_view(project_name: str) -> dict[str, Any]:
             subagent_description=s.get("subagent_description"),
         )
         s["kind"] = "subagent" if s.get("parent_session_id") else "main"
-
-    overhead_pct = (100.0 * overhead_tokens / grand_tokens) if grand_tokens else 0.0
 
     # Enriched data from the official analyzer (cache breaks, subagent-rollup prompts).
     # Gracefully absent if enrichment hasn't been run yet.
@@ -226,8 +234,8 @@ def build_project_view(project_name: str) -> dict[str, Any]:
             "cache_creation_tokens_h": _fmt(sum(s["cache_creation_tokens"] for s in sessions)),
             "cache_read_tokens_h": _fmt(sum(s["cache_read_tokens"] for s in sessions)),
             "output_tokens_h": _fmt(sum(s["output_tokens"] for s in sessions)),
-            "total_tokens": grand_tokens,
-            "total_tokens_h": _fmt(grand_tokens),
+            "total_tokens": raw_total_tokens,
+            "total_tokens_h": _fmt(raw_total_tokens),
             "cost": grand_cost,
             "overhead_tokens_h": _fmt(overhead_tokens),
             "overhead_pct": round(overhead_pct, 2),

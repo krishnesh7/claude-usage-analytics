@@ -49,6 +49,22 @@ CREATE TABLE IF NOT EXISTS session_attribution (
   count INTEGER DEFAULT 0,
   PRIMARY KEY (session_id, attribution_plugin, attribution_skill)
 );
+CREATE TABLE IF NOT EXISTS session_tools (
+  session_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  count INTEGER DEFAULT 0,
+  PRIMARY KEY (session_id, tool_name)
+);
+CREATE TABLE IF NOT EXISTS session_cwds (
+  session_id TEXT NOT NULL,
+  cwd TEXT NOT NULL,
+  PRIMARY KEY (session_id, cwd)
+);
+CREATE TABLE IF NOT EXISTS session_branches (
+  session_id TEXT NOT NULL,
+  git_branch TEXT NOT NULL,
+  PRIMARY KEY (session_id, git_branch)
+);
 """
 
 

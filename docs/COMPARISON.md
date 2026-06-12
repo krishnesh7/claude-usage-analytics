@@ -25,7 +25,7 @@ report on token usage. That's where the similarity ends.
 | **6-tier session confidence resolver** | ❌ | ✅ EXACT / SUBDIR / WORKTREE / FUZZY / AMBIGUOUS / UNMATCHED |
 | **Git worktree consolidation** | ❌ | ✅ worktree sessions roll up to parent project |
 | **Cost-mode toggle (API/Conservative/Subscription)** | ❌ | ✅ with auto-detected default per your plan |
-| **Fluency / efficiency scoring** | ❌ | ✅ 4-axis percentile scoring + recommendations per project |
+| **Efficiency scoring** | ❌ | ✅ 4-axis percentile scoring + recommendations per project |
 | **Drill-down navigation (project → stage → session)** | ❌ | ✅ breadcrumb nav in the dashboard |
 
 ---
@@ -147,12 +147,12 @@ and can be filtered by named project.
 
 ---
 
-### Fluency scoring — efficiency, not just spend
+### Efficiency scoring — not just spend
 
 session-report (and raw token totals generally) tell you *how much* you spent.
 Neither tells you whether that spend was *efficient*.
 
-claude-usage-tracker's fluency panel scores each project on four axes, each a
+claude-usage-tracker's efficiency panel scores each project on four axes, each a
 percentile rank against your other projects:
 
 - **Cache Hygiene** — % of input-side tokens served from cache vs sent fresh

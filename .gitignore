@@ -51,10 +51,6 @@ data/
 parser/node_modules/
 node_modules/
 
-# Local superpowers scratch dir and in-progress plan drafts — not for the repo
+# Local superpowers scratch dir and in-progress plan/spec docs — not for the repo
 .superpowers/
-docs/superpowers/plans/2026-05-29-tier2-dashboard.md
-docs/superpowers/plans/2026-06-01-dashboard-panels.md
-docs/superpowers/plans/2026-06-07-cost-modes-dynamic-pricing.md
-docs/superpowers/plans/2026-06-09-fluency-panel-tooltips.md
-docs/superpowers/specs/2026-06-09-fluency-panel-tooltips-design.md
+docs/superpowers/

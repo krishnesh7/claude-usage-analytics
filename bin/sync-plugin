@@ -20,6 +20,13 @@ rsync -a --delete "$SRC/hooks/"    "$DST/hooks/"
 rsync -a --delete "$SRC/skills/"   "$DST/skills/"
 cp "$SRC/.claude-plugin/plugin.json" "$DST/plugin.json"
 
+# Keep marketplace copy of plugin.json in sync so fresh installs get the same manifest.
+MKT_DST="$HOME/.claude/plugins/marketplaces/local-rk-plugins/plugins/claude-usage-analytics"
+if [[ -d "$MKT_DST" ]]; then
+  cp "$SRC/.claude-plugin/plugin.json" "$MKT_DST/plugin.json"
+  echo "Marketplace manifest synced → $MKT_DST/plugin.json"
+fi
+
 # Deploy parser so the DB schema migration (cache_creation_1h_tokens etc.) stays in sync.
 PARSER_DST="$HOME/.claude/usage/parser"
 mkdir -p "$PARSER_DST"

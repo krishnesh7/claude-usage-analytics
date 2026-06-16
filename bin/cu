@@ -34,7 +34,10 @@ log() { printf '[cu-bootstrap] %s\n' "$*" >> "$LOG"; printf '[cu-bootstrap] %s\n
 
 find_python() {
   for c in python3.12 python3.11 python3.10 python3 python; do
-    if command -v "$c" >/dev/null 2>&1; then echo "$c"; return 0; fi
+    # command -v succeeds even for broken Windows Store stubs; test the binary actually runs.
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c "import sys; sys.exit(0)" 2>/dev/null; then
+      echo "$c"; return 0
+    fi
   done
   return 1
 }
@@ -61,16 +64,40 @@ seed_config() {
   done
 }
 
+make_windows_shims() {
+  # On Windows, venv creates Scripts/ not bin/. Create bin/ wrapper scripts so
+  # the rest of this launcher (and any tooling) can use POSIX-style bin/ paths.
+  [ -d "$VENV/Scripts" ] || return 0
+  [ -d "$VENV/bin" ] && return 0
+  log "Windows venv detected: creating bin/ shims for Scripts/"
+  mkdir -p "$VENV/bin"
+  for exe in python pip; do
+    [ -f "$VENV/Scripts/${exe}.exe" ] || continue
+    printf '#!/usr/bin/env bash\nexec "%s/Scripts/%s.exe" "$@"\n' "$VENV" "$exe" > "$VENV/bin/$exe"
+    chmod +x "$VENV/bin/$exe"
+  done
+}
+
+add_cu_shim() {
+  # cu entry point lands in Scripts/cu.exe on Windows after pip install.
+  [ -f "$VENV/bin/cu" ] && return 0
+  [ -f "$VENV/Scripts/cu.exe" ] || return 0
+  printf '#!/usr/bin/env bash\nexec "%s/Scripts/cu.exe" "$@"\n' "$VENV" > "$VENV/bin/cu"
+  chmod +x "$VENV/bin/cu"
+}
+
 bootstrap() {
   local py
-  py="$(find_python)" || { log "FATAL: no python3 found on PATH"; exit 127; }
+  py="$(find_python)" || { log "FATAL: no python found on PATH"; exit 127; }
   log "creating venv at $VENV using $py"
   "$py" -m venv "$VENV" >>"$LOG" 2>&1 || { log "FATAL: venv creation failed (see $LOG)"; exit 1; }
+  make_windows_shims
   log "installing claude-usage-analytics into venv (this runs once)…"
   "$VENV/bin/pip" install --quiet --upgrade pip >>"$LOG" 2>&1 || true
   "$VENV/bin/pip" install --quiet -e "$ROOT" >>"$LOG" 2>&1 || {
     log "FATAL: pip install failed (see $LOG)"; exit 1;
   }
+  add_cu_shim
   log "bootstrap complete"
 }
 
@@ -132,6 +159,7 @@ ensure_parser_deps
 if [ "${1:-}" = "parse" ] && ! command -v node >/dev/null 2>&1; then
   echo "cu: 'node' not found on PATH — the parser can't run, so usage data won't update." >&2
   echo "cu: install Node.js (https://nodejs.org) and re-run; existing data still displays." >&2
+  echo "cu: on Windows, open a new terminal after installing so PATH is refreshed." >&2
 fi
 
 exec "$CU_REAL" "$@"
